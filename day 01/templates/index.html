@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 01 — LLM chat</title>
+  <style>
+    :root {
+      --bg: #f6f4f0;
+      --ink: #1a1a1a;
+      --muted: #5c5c5c;
+      --line: #d6d2cb;
+      --accent: #1f4d3a;
+      --accent-hover: #16392b;
+      --surface: #fffdf9;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse at top left, #ebe6dc 0%, transparent 55%),
+        linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+
+    main {
+      max-width: 40rem;
+      margin: 0 auto;
+      padding: 3rem 1.25rem 4rem;
+    }
+
+    h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.75rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .sub {
+      margin: 0 0 2rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .field { margin-bottom: 1.25rem; }
+
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--ink);
+      font: inherit;
+      padding: 0.75rem 0.85rem;
+    }
+
+    textarea {
+      min-height: 8rem;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    select { cursor: pointer; }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #f7f7f5;
+      font: inherit;
+      font-weight: 500;
+      padding: 0.7rem 1.25rem;
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+
+    .hint {
+      margin: 0.45rem 0 0;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    #reply {
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--line);
+      white-space: pre-wrap;
+      line-height: 1.5;
+      min-height: 1.5rem;
+    }
+
+    #reply.error { color: #8b1e1e; }
+    #reply.empty { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 01</h1>
+    <p class="sub">Минимальный запрос в OpenAI и ответ на экране.</p>
+
+    <form id="chat-form">
+      <div class="field">
+        <label for="prompt">Промпт</label>
+        <textarea id="prompt" name="prompt" required placeholder="Напиши что-нибудь…"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="model">Модель</label>
+        <select id="model" name="model">
+          <option value="gpt-5.4" selected>gpt-5.4 — баланс качества и цены</option>
+          <option value="gpt-5.4-mini">gpt-5.4-mini — дешевле и быстрее</option>
+          <option value="gpt-5.4-nano">gpt-5.4-nano — самый дешёвый</option>
+          <option value="gpt-5.5">gpt-5.5 — флагман, дороже</option>
+          <option value="gpt-4o">gpt-4o — legacy</option>
+        </select>
+        <p class="hint">Качество ↑: nano → mini → 5.4 → 5.5. Цена в ту же сторону.</p>
+      </div>
+
+      <button type="submit" id="submit">Отправить</button>
+    </form>
+
+    <div id="reply" class="empty" aria-live="polite">Ответ появится здесь.</div>
+  </main>
+
+  <script>
+    const form = document.getElementById("chat-form");
+    const replyEl = document.getElementById("reply");
+    const submitBtn = document.getElementById("submit");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const prompt = document.getElementById("prompt").value.trim();
+      const model = document.getElementById("model").value;
+
+      replyEl.className = "";
+      replyEl.textContent = "Жду ответ…";
+      submitBtn.disabled = true;
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, model }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          replyEl.className = "error";
+          replyEl.textContent = data.error || "Request failed";
+        } else {
+          replyEl.textContent = data.reply || "(пустой ответ)";
+        }
+      } catch (err) {
+        replyEl.className = "error";
+        replyEl.textContent = String(err);
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

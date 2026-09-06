@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 05 — версии моделей</title>
+  <style>
+    :root {
+      --ink: #1a1a1a;
+      --muted: #5c5c5c;
+      --line: #d6d2cb;
+      --accent: #1f4d3a;
+      --accent-hover: #16392b;
+      --surface: #fffdf9;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse at top left, #ebe6dc 0%, transparent 55%),
+        linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+
+    main {
+      max-width: 68rem;
+      margin: 0 auto;
+      padding: 3rem 1.25rem 4rem;
+    }
+
+    h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.75rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .sub {
+      margin: 0 0 2rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .field { margin-bottom: 1.15rem; }
+
+    textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--ink);
+      font: inherit;
+      padding: 0.75rem 0.85rem;
+      min-height: 7rem;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    .hint {
+      margin: 0.4rem 0 0;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .cheat {
+      margin: 0 0 1rem;
+      padding: 0;
+      list-style: none;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .cheat li { margin-bottom: 0.35rem; }
+    .cheat strong { color: var(--ink); font-weight: 600; }
+
+    .links {
+      margin: 0 0 1.25rem;
+      font-size: 0.85rem;
+    }
+
+    .links a { color: var(--accent); }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #f7f7f5;
+      font: inherit;
+      font-weight: 500;
+      padding: 0.7rem 1.25rem;
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+
+    #global-error {
+      margin-top: 1rem;
+      color: #8b1e1e;
+      white-space: pre-wrap;
+    }
+
+    .results {
+      display: grid;
+      gap: 1.25rem;
+      margin-top: 2rem;
+    }
+
+    @media (min-width: 900px) {
+      .results { grid-template-columns: 1fr 1fr 1fr; }
+    }
+
+    .panel {
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+    }
+
+    .panel h3 {
+      margin: 0 0 0.25rem;
+      font-size: 1rem;
+    }
+
+    .model-id {
+      margin: 0 0 0.75rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .report {
+      margin: 0 0 0.85rem;
+      padding: 0.75rem 0.85rem;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+    }
+
+    .report h4 {
+      margin: 0 0 0.55rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+
+    .report dl {
+      margin: 0;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.35rem 0.75rem;
+      font-size: 0.85rem;
+    }
+
+    .report dt {
+      color: var(--muted);
+    }
+
+    .report dd {
+      margin: 0;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .reply {
+      white-space: pre-wrap;
+      line-height: 1.5;
+      font-size: 0.95rem;
+    }
+
+    .reply.error { color: #8b1e1e; }
+    .reply.empty { color: var(--muted); }
+
+    .notes {
+      margin-top: 2rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--line);
+    }
+
+    .notes h2 {
+      margin: 0 0 0.5rem;
+      font-size: 1.05rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 05</h1>
+    <p class="sub">Один промпт — слабая / средняя / сильная модель. Рядом с каждым ответом — отчёт: время, токены, стоимость.</p>
+
+    <form id="models-form">
+      <div class="field">
+        <label for="prompt">Промпт</label>
+        <textarea id="prompt" name="prompt" required>Кратко объясни разницу между TCP и UDP для начинающего разработчика. Дай по 2 плюса и 2 минуса каждого. В конце — когда что выбирать (3–5 предложений).</textarea>
+        <p class="hint">nano/mini: temperature=0. gpt-5.5: только default (1). Цены — оценка по публичному прайсу.</p>
+      </div>
+
+      <ul class="cheat">
+        <li><strong>weak</strong> — gpt-5.4-nano ($0.20 / $1.25 за 1M tok)</li>
+        <li><strong>medium</strong> — gpt-5.4-mini ($0.75 / $4.50)</li>
+        <li><strong>strong</strong> — gpt-5.5 ($5.00 / $30.00)</li>
+      </ul>
+
+      <p class="links">
+        Ссылки:
+        <a href="https://platform.openai.com/docs/pricing" target="_blank" rel="noopener">Pricing</a>
+        ·
+        <a href="https://platform.openai.com/docs/models" target="_blank" rel="noopener">Models</a>
+      </p>
+
+      <button type="submit" id="submit">Сравнить модели</button>
+    </form>
+
+    <div id="global-error" hidden></div>
+
+    <div class="results">
+      <section class="panel">
+        <h3>Weak</h3>
+        <p class="model-id" id="id-weak">gpt-5.4-nano</p>
+        <div class="report" id="report-weak">
+          <h4>Отчёт</h4>
+          <dl>
+            <dt>Время ответа</dt><dd id="latency-weak">—</dd>
+            <dt>Токены</dt><dd id="tokens-weak">—</dd>
+            <dt>Стоимость</dt><dd id="cost-weak">—</dd>
+          </dl>
+        </div>
+        <div class="reply empty" id="reply-weak">Ответ появится здесь.</div>
+      </section>
+      <section class="panel">
+        <h3>Medium</h3>
+        <p class="model-id" id="id-medium">gpt-5.4-mini</p>
+        <div class="report" id="report-medium">
+          <h4>Отчёт</h4>
+          <dl>
+            <dt>Время ответа</dt><dd id="latency-medium">—</dd>
+            <dt>Токены</dt><dd id="tokens-medium">—</dd>
+            <dt>Стоимость</dt><dd id="cost-medium">—</dd>
+          </dl>
+        </div>
+        <div class="reply empty" id="reply-medium">Ответ появится здесь.</div>
+      </section>
+      <section class="panel">
+        <h3>Strong</h3>
+        <p class="model-id" id="id-strong">gpt-5.5</p>
+        <div class="report" id="report-strong">
+          <h4>Отчёт</h4>
+          <dl>
+            <dt>Время ответа</dt><dd id="latency-strong">—</dd>
+            <dt>Токены</dt><dd id="tokens-strong">—</dd>
+            <dt>Стоимость</dt><dd id="cost-strong">—</dd>
+          </dl>
+        </div>
+        <div class="reply empty" id="reply-strong">Ответ появится здесь.</div>
+      </section>
+    </div>
+
+    <section class="notes">
+      <h2>Вывод</h2>
+      <p class="hint">Качество / скорость / ресурсоёмкость. Только в браузере (localStorage).</p>
+      <textarea id="notes" placeholder="Например: nano быстрее и дешевле, но слабее структурирует; 5.5 лучше объясняет trade-offs…"></textarea>
+    </section>
+  </main>
+
+  <script>
+    const TIERS = ["weak", "medium", "strong"];
+    const NOTES_KEY = "day05-model-notes";
+    const form = document.getElementById("models-form");
+    const submitBtn = document.getElementById("submit");
+    const globalError = document.getElementById("global-error");
+    const notesEl = document.getElementById("notes");
+
+    notesEl.value = localStorage.getItem(NOTES_KEY) || "";
+    notesEl.addEventListener("input", () => {
+      localStorage.setItem(NOTES_KEY, notesEl.value);
+    });
+
+    function formatTokens(usage) {
+      if (!usage) return "—";
+      const p = usage.prompt_tokens ?? "—";
+      const c = usage.completion_tokens ?? "—";
+      const t = usage.total_tokens ?? "—";
+      return "prompt " + p + " · completion " + c + " · total " + t;
+    }
+
+    function formatCost(cost) {
+      if (cost == null) return "—";
+      return "$" + Number(cost).toFixed(8) + " (оценка)";
+    }
+
+    function setReport(tier, data) {
+      if (data.error) {
+        document.getElementById("latency-" + tier).textContent = "—";
+        document.getElementById("tokens-" + tier).textContent = "—";
+        document.getElementById("cost-" + tier).textContent = "—";
+        return;
+      }
+      document.getElementById("latency-" + tier).textContent =
+        data.latency_ms != null ? data.latency_ms + " ms" : "—";
+      document.getElementById("tokens-" + tier).textContent = formatTokens(data.usage);
+      document.getElementById("cost-" + tier).textContent = formatCost(data.cost_usd);
+    }
+
+    function setLoading() {
+      TIERS.forEach((tier) => {
+        document.getElementById("latency-" + tier).textContent = "…";
+        document.getElementById("tokens-" + tier).textContent = "…";
+        document.getElementById("cost-" + tier).textContent = "…";
+        const reply = document.getElementById("reply-" + tier);
+        reply.className = "reply empty";
+        reply.textContent = "Жду ответ…";
+      });
+    }
+
+    function showTier(tier, data) {
+      if (data.model) {
+        document.getElementById("id-" + tier).textContent = data.model;
+      }
+      setReport(tier, data);
+      const reply = document.getElementById("reply-" + tier);
+      if (data.error) {
+        reply.className = "reply error";
+        reply.textContent = data.error;
+      } else {
+        reply.className = "reply";
+        reply.textContent = data.reply || "(пустой ответ)";
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      globalError.hidden = true;
+      submitBtn.disabled = true;
+      setLoading();
+
+      try {
+        const res = await fetch("/api/models", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: document.getElementById("prompt").value.trim(),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          globalError.hidden = false;
+          globalError.textContent = data.error || "Request failed";
+          TIERS.forEach((tier) => {
+            document.getElementById("latency-" + tier).textContent = "—";
+            document.getElementById("tokens-" + tier).textContent = "—";
+            document.getElementById("cost-" + tier).textContent = "—";
+            const reply = document.getElementById("reply-" + tier);
+            reply.className = "reply empty";
+            reply.textContent = "—";
+          });
+          return;
+        }
+        TIERS.forEach((tier) => {
+          showTier(tier, (data.results || {})[tier] || { error: "No data" });
+        });
+      } catch (err) {
+        globalError.hidden = false;
+        globalError.textContent = String(err);
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

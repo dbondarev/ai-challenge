@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 03 — способы рассуждения</title>
+  <style>
+    :root {
+      --bg: #f6f4f0;
+      --ink: #1a1a1a;
+      --muted: #5c5c5c;
+      --line: #d6d2cb;
+      --accent: #1f4d3a;
+      --accent-hover: #16392b;
+      --surface: #fffdf9;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse at top left, #ebe6dc 0%, transparent 55%),
+        linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+
+    main {
+      max-width: 64rem;
+      margin: 0 auto;
+      padding: 3rem 1.25rem 4rem;
+    }
+
+    h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.75rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .sub {
+      margin: 0 0 2rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .field { margin-bottom: 1.15rem; }
+
+    .row {
+      display: grid;
+      gap: 1rem;
+    }
+
+    @media (min-width: 720px) {
+      .row.two { grid-template-columns: 1fr 1fr; }
+      .row.three { grid-template-columns: 1fr 1fr 1fr; }
+    }
+
+    textarea,
+    select,
+    input[type="number"],
+    input[type="text"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--ink);
+      font: inherit;
+      padding: 0.75rem 0.85rem;
+    }
+
+    textarea {
+      min-height: 7.5rem;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    select { cursor: pointer; }
+
+    .hint {
+      margin: 0.4rem 0 0;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #f7f7f5;
+      font: inherit;
+      font-weight: 500;
+      padding: 0.7rem 1.25rem;
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+
+    #global-error {
+      margin-top: 1rem;
+      color: #8b1e1e;
+      white-space: pre-wrap;
+    }
+
+    .results {
+      display: grid;
+      gap: 1.25rem;
+      margin-top: 2rem;
+    }
+
+    @media (min-width: 900px) {
+      .results { grid-template-columns: 1fr 1fr; }
+    }
+
+    .panel {
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+    }
+
+    .panel h3 {
+      margin: 0 0 0.5rem;
+      font-size: 1rem;
+    }
+
+    .meta {
+      margin: 0 0 0.75rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+
+    .reply {
+      white-space: pre-wrap;
+      line-height: 1.5;
+      min-height: 1.5rem;
+    }
+
+    .reply.error { color: #8b1e1e; }
+    .reply.empty { color: var(--muted); }
+
+    details.generated {
+      margin-bottom: 0.75rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    details.generated summary {
+      cursor: pointer;
+      color: var(--ink);
+      margin-bottom: 0.4rem;
+    }
+
+    details.generated pre {
+      margin: 0;
+      white-space: pre-wrap;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0.75rem;
+      font: inherit;
+      font-size: 0.85rem;
+      color: var(--ink);
+    }
+
+    .notes {
+      margin-top: 2rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--line);
+    }
+
+    .notes h2 {
+      margin: 0 0 0.5rem;
+      font-size: 1.05rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 03</h1>
+    <p class="sub">Одна задача — четыре способа рассуждения через API. Сравни ответы и точность.</p>
+
+    <form id="reason-form">
+      <div class="field">
+        <label for="task">Задача</label>
+        <textarea id="task" name="task" required>У фермера есть волк, коза и капуста. Нужно перевезти всех на другой берег реки. Лодка вмещает только фермера и одного «пассажира» (волка, козу или капусту). Нельзя оставлять волка наедине с козой и козу наедине с капустой без фермера. Опиши минимальную последовательность перевозок.</textarea>
+        <p class="hint">По умолчанию — классическая задача про реку (есть эталон решения).</p>
+      </div>
+
+      <div class="row three">
+        <div class="field">
+          <label for="model">Модель</label>
+          <select id="model" name="model">
+            <option value="gpt-5.4" selected>gpt-5.4 — баланс</option>
+            <option value="gpt-5.4-mini">gpt-5.4-mini</option>
+            <option value="gpt-5.4-nano">gpt-5.4-nano</option>
+            <option value="gpt-5.5">gpt-5.5 — флагман</option>
+            <option value="gpt-4o">gpt-4o — legacy</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="experts">Эксперты (через запятую)</label>
+          <input id="experts" type="text" value="аналитик, инженер, критик">
+        </div>
+        <div class="field">
+          <label for="temperature">temperature</label>
+          <input id="temperature" type="number" min="0" max="2" step="0.1" value="0.3">
+        </div>
+      </div>
+
+      <button type="submit" id="submit">Решить четырьмя способами</button>
+    </form>
+
+    <div id="global-error" hidden></div>
+
+    <div class="results">
+      <section class="panel">
+        <h3>1. Direct — прямой ответ</h3>
+        <p id="meta-direct" class="meta"></p>
+        <div id="reply-direct" class="reply empty">Ответ появится здесь.</div>
+      </section>
+
+      <section class="panel">
+        <h3>2. Step-by-step — «решай пошагово»</h3>
+        <p id="meta-step_by_step" class="meta"></p>
+        <div id="reply-step_by_step" class="reply empty">Ответ появится здесь.</div>
+      </section>
+
+      <section class="panel">
+        <h3>3. Meta-prompt — сначала промпт, потом решение</h3>
+        <details class="generated" id="details-meta">
+          <summary>Сгенерированный промпт</summary>
+          <pre id="generated-meta"></pre>
+        </details>
+        <p id="meta-meta_prompt" class="meta"></p>
+        <div id="reply-meta_prompt" class="reply empty">Ответ появится здесь.</div>
+      </section>
+
+      <section class="panel">
+        <h3>4. Experts — группа экспертов</h3>
+        <p id="meta-experts" class="meta"></p>
+        <div id="reply-experts" class="reply empty">Ответ появится здесь.</div>
+      </section>
+    </div>
+
+    <section class="notes">
+      <h2>Заметки сравнения</h2>
+      <p class="hint">Только в браузере (localStorage). Какой способ точнее? Чем отличаются ответы?</p>
+      <textarea id="notes" placeholder="Например: step-by-step дал верную последовательность; direct пропустил шаг…"></textarea>
+    </section>
+  </main>
+
+  <script>
+    const MODES = ["direct", "step_by_step", "meta_prompt", "experts"];
+    const NOTES_KEY = "day03-comparison-notes";
+    const form = document.getElementById("reason-form");
+    const submitBtn = document.getElementById("submit");
+    const globalError = document.getElementById("global-error");
+    const notesEl = document.getElementById("notes");
+
+    notesEl.value = localStorage.getItem(NOTES_KEY) || "";
+    notesEl.addEventListener("input", () => {
+      localStorage.setItem(NOTES_KEY, notesEl.value);
+    });
+
+    function formatUsage(usage) {
+      if (!usage) return "";
+      const parts = [];
+      if (usage.prompt_tokens != null) parts.push("prompt " + usage.prompt_tokens);
+      if (usage.completion_tokens != null) parts.push("completion " + usage.completion_tokens);
+      if (usage.total_tokens != null) parts.push("total " + usage.total_tokens);
+      return parts.join(" · ");
+    }
+
+    function resetPanel(mode) {
+      const replyEl = document.getElementById("reply-" + mode);
+      const metaEl = document.getElementById("meta-" + mode);
+      replyEl.className = "reply empty";
+      replyEl.textContent = "Жду ответ…";
+      metaEl.textContent = "";
+      if (mode === "meta_prompt") {
+        document.getElementById("generated-meta").textContent = "";
+      }
+    }
+
+    function showPanel(mode, data) {
+      const replyEl = document.getElementById("reply-" + mode);
+      const metaEl = document.getElementById("meta-" + mode);
+
+      if (data.error) {
+        replyEl.className = "reply error";
+        replyEl.textContent = data.error;
+        metaEl.textContent = "";
+        return;
+      }
+
+      replyEl.className = "reply";
+      replyEl.textContent = data.reply || "(пустой ответ)";
+
+      let meta = "finish_reason: " + (data.finish_reason || "—");
+      const usage = formatUsage(data.usage);
+      if (usage) meta += "\n" + usage;
+      if (mode === "meta_prompt" && data.step1_usage) {
+        const s1 = formatUsage(data.step1_usage);
+        if (s1) meta += "\nstep1: " + s1;
+      }
+      metaEl.textContent = meta;
+
+      if (mode === "meta_prompt") {
+        document.getElementById("generated-meta").textContent =
+          data.generated_prompt || "(пусто)";
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      globalError.hidden = true;
+      submitBtn.disabled = true;
+      MODES.forEach(resetPanel);
+
+      const body = {
+        task: document.getElementById("task").value.trim(),
+        model: document.getElementById("model").value,
+        experts: document.getElementById("experts").value,
+        temperature: document.getElementById("temperature").value,
+      };
+
+      try {
+        const res = await fetch("/api/reason", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          globalError.hidden = false;
+          globalError.textContent = data.error || "Request failed";
+          MODES.forEach((mode) => {
+            document.getElementById("reply-" + mode).className = "reply empty";
+            document.getElementById("reply-" + mode).textContent = "—";
+          });
+          return;
+        }
+        MODES.forEach((mode) => showPanel(mode, data[mode] || { error: "No data" }));
+      } catch (err) {
+        globalError.hidden = false;
+        globalError.textContent = String(err);
+        MODES.forEach((mode) => {
+          document.getElementById("reply-" + mode).className = "reply empty";
+          document.getElementById("reply-" + mode).textContent = "—";
+        });
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

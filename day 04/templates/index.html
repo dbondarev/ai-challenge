@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 04 — temperature</title>
+  <style>
+    :root {
+      --ink: #1a1a1a;
+      --muted: #5c5c5c;
+      --line: #d6d2cb;
+      --accent: #1f4d3a;
+      --accent-hover: #16392b;
+      --surface: #fffdf9;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse at top left, #ebe6dc 0%, transparent 55%),
+        linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+
+    main {
+      max-width: 68rem;
+      margin: 0 auto;
+      padding: 3rem 1.25rem 4rem;
+    }
+
+    h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.75rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .sub {
+      margin: 0 0 2rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .field { margin-bottom: 1.15rem; }
+
+    .row {
+      display: grid;
+      gap: 1rem;
+    }
+
+    @media (min-width: 720px) {
+      .row.two { grid-template-columns: 1fr 1fr; }
+    }
+
+    textarea,
+    select,
+    input[type="number"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--ink);
+      font: inherit;
+      padding: 0.75rem 0.85rem;
+    }
+
+    textarea {
+      min-height: 6.5rem;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    select { cursor: pointer; }
+
+    .hint {
+      margin: 0.4rem 0 0;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .cheat {
+      margin: 0 0 1.25rem;
+      padding: 0;
+      list-style: none;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .cheat li {
+      margin-bottom: 0.35rem;
+    }
+
+    .cheat strong { color: var(--ink); font-weight: 600; }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #f7f7f5;
+      font: inherit;
+      font-weight: 500;
+      padding: 0.7rem 1.25rem;
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+
+    #global-error {
+      margin-top: 1rem;
+      color: #8b1e1e;
+      white-space: pre-wrap;
+    }
+
+    .results {
+      display: grid;
+      gap: 1.25rem;
+      margin-top: 2rem;
+    }
+
+    @media (min-width: 900px) {
+      .results { grid-template-columns: 1fr 1fr 1fr; }
+    }
+
+    .panel {
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+    }
+
+    .panel h3 {
+      margin: 0 0 0.75rem;
+      font-size: 1rem;
+    }
+
+    .sample {
+      margin-bottom: 1.1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px dashed var(--line);
+    }
+
+    .sample:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+
+    .sample h4 {
+      margin: 0 0 0.4rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .meta {
+      margin: 0 0 0.5rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+
+    .reply {
+      white-space: pre-wrap;
+      line-height: 1.5;
+      font-size: 0.95rem;
+    }
+
+    .reply.error { color: #8b1e1e; }
+    .reply.empty { color: var(--muted); }
+
+    .notes {
+      margin-top: 2rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--line);
+    }
+
+    .notes h2 {
+      margin: 0 0 0.5rem;
+      font-size: 1.05rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 04</h1>
+    <p class="sub">Один промпт — temperature 0 / 0.7 / 1.2. Сравни точность, креативность и разнообразие.</p>
+
+    <form id="temp-form">
+      <div class="field">
+        <label for="prompt">Промпт</label>
+        <textarea id="prompt" name="prompt" required>Назови столицу Австралии одним словом. Затем придумай 3 необычных названия для кафе с котиками и короткое обоснование к каждому.</textarea>
+        <p class="hint">Смесь факта и креатива: удобно смотреть и точность, и разброс идей.</p>
+      </div>
+
+      <div class="row two">
+        <div class="field">
+          <label for="model">Модель</label>
+          <select id="model" name="model">
+            <option value="gpt-5.4" selected>gpt-5.4 — баланс</option>
+            <option value="gpt-5.4-mini">gpt-5.4-mini</option>
+            <option value="gpt-5.4-nano">gpt-5.4-nano</option>
+            <option value="gpt-5.5">gpt-5.5 — флагман</option>
+            <option value="gpt-4o">gpt-4o — legacy</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="samples">Сэмплов на температуру</label>
+          <input id="samples" type="number" min="1" max="3" value="2">
+          <p class="hint">2+ нужно, чтобы увидеть разнообразие внутри одной температуры.</p>
+        </div>
+      </div>
+
+      <ul class="cheat">
+        <li><strong>0</strong> — стабильность, факты, меньше сюрпризов</li>
+        <li><strong>0.7</strong> — баланс</li>
+        <li><strong>1.2</strong> — креатив, выше разброс</li>
+      </ul>
+
+      <button type="submit" id="submit">Сравнить температуры</button>
+    </form>
+
+    <div id="global-error" hidden></div>
+
+    <div class="results">
+      <section class="panel" data-temp="0">
+        <h3>temperature = 0</h3>
+        <div class="samples" id="col-0"></div>
+      </section>
+      <section class="panel" data-temp="0.7">
+        <h3>temperature = 0.7</h3>
+        <div class="samples" id="col-0.7"></div>
+      </section>
+      <section class="panel" data-temp="1.2">
+        <h3>temperature = 1.2</h3>
+        <div class="samples" id="col-1.2"></div>
+      </section>
+    </div>
+
+    <section class="notes">
+      <h2>Выводы</h2>
+      <p class="hint">Для каких задач лучше 0 / 0.7 / 1.2? Заметки только в браузере (localStorage).</p>
+      <textarea id="notes" placeholder="Например: 0 — факты и код; 0.7 — обычные ответы; 1.2 — идеи, названия, brainstorm…"></textarea>
+    </section>
+  </main>
+
+  <script>
+    const TEMPS = ["0", "0.7", "1.2"];
+    const NOTES_KEY = "day04-temperature-notes";
+    const form = document.getElementById("temp-form");
+    const submitBtn = document.getElementById("submit");
+    const globalError = document.getElementById("global-error");
+    const notesEl = document.getElementById("notes");
+
+    notesEl.value = localStorage.getItem(NOTES_KEY) || "";
+    notesEl.addEventListener("input", () => {
+      localStorage.setItem(NOTES_KEY, notesEl.value);
+    });
+
+    function formatUsage(usage) {
+      if (!usage) return "";
+      const parts = [];
+      if (usage.prompt_tokens != null) parts.push("prompt " + usage.prompt_tokens);
+      if (usage.completion_tokens != null) parts.push("completion " + usage.completion_tokens);
+      if (usage.total_tokens != null) parts.push("total " + usage.total_tokens);
+      return parts.join(" · ");
+    }
+
+    function placeholderColumns(text) {
+      TEMPS.forEach((temp) => {
+        const col = document.getElementById("col-" + temp);
+        col.innerHTML = '<div class="sample"><div class="reply empty">' + text + "</div></div>";
+      });
+    }
+
+    function renderColumn(temp, samples) {
+      const col = document.getElementById("col-" + temp);
+      col.innerHTML = "";
+      (samples || []).forEach((item, index) => {
+        const wrap = document.createElement("div");
+        wrap.className = "sample";
+
+        const title = document.createElement("h4");
+        title.textContent = "Sample " + (index + 1);
+        wrap.appendChild(title);
+
+        if (item.error) {
+          const err = document.createElement("div");
+          err.className = "reply error";
+          err.textContent = item.error;
+          wrap.appendChild(err);
+        } else {
+          const meta = document.createElement("p");
+          meta.className = "meta";
+          let metaText = "finish_reason: " + (item.finish_reason || "—");
+          const usage = formatUsage(item.usage);
+          if (usage) metaText += "\n" + usage;
+          meta.textContent = metaText;
+          wrap.appendChild(meta);
+
+          const reply = document.createElement("div");
+          reply.className = "reply";
+          reply.textContent = item.reply || "(пустой ответ)";
+          wrap.appendChild(reply);
+        }
+
+        col.appendChild(wrap);
+      });
+    }
+
+    placeholderColumns("Ответы появятся здесь.");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      globalError.hidden = true;
+      submitBtn.disabled = true;
+      placeholderColumns("Жду ответ…");
+
+      const body = {
+        prompt: document.getElementById("prompt").value.trim(),
+        model: document.getElementById("model").value,
+        samples: document.getElementById("samples").value,
+      };
+
+      try {
+        const res = await fetch("/api/temperature", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          globalError.hidden = false;
+          globalError.textContent = data.error || "Request failed";
+          placeholderColumns("—");
+          return;
+        }
+        TEMPS.forEach((temp) => {
+          renderColumn(temp, (data.temps || {})[temp] || []);
+        });
+      } catch (err) {
+        globalError.hidden = false;
+        globalError.textContent = String(err);
+        placeholderColumns("—");
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

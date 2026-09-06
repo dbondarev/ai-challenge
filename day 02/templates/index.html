@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 02 — контроль ответа</title>
+  <style>
+    :root {
+      --bg: #f6f4f0;
+      --ink: #1a1a1a;
+      --muted: #5c5c5c;
+      --line: #d6d2cb;
+      --accent: #1f4d3a;
+      --accent-hover: #16392b;
+      --surface: #fffdf9;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse at top left, #ebe6dc 0%, transparent 55%),
+        linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+
+    main {
+      max-width: 56rem;
+      margin: 0 auto;
+      padding: 3rem 1.25rem 4rem;
+    }
+
+    h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.75rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .sub {
+      margin: 0 0 2rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .field { margin-bottom: 1.15rem; }
+
+    .row {
+      display: grid;
+      gap: 1rem;
+    }
+
+    @media (min-width: 720px) {
+      .row.two { grid-template-columns: 1fr 1fr; }
+      .row.three { grid-template-columns: 1fr 1fr 1fr; }
+    }
+
+    textarea,
+    select,
+    input[type="number"],
+    input[type="text"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--ink);
+      font: inherit;
+      padding: 0.75rem 0.85rem;
+    }
+
+    textarea {
+      min-height: 7rem;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    select, input { cursor: text; }
+    select { cursor: pointer; }
+
+    .controls {
+      margin: 1.5rem 0 1.25rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--line);
+    }
+
+    .controls h2 {
+      margin: 0 0 0.35rem;
+      font-size: 1.05rem;
+      font-weight: 600;
+    }
+
+    .hint {
+      margin: 0 0 1rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .check {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.55rem;
+      margin-bottom: 0.85rem;
+      font-size: 0.9rem;
+      color: var(--ink);
+    }
+
+    .check input { width: auto; margin-top: 0.2rem; cursor: pointer; }
+
+    .tag {
+      display: inline-block;
+      margin-left: 0.35rem;
+      padding: 0.05rem 0.4rem;
+      border-radius: 4px;
+      background: #e8ebe4;
+      color: var(--muted);
+      font-size: 0.7rem;
+      vertical-align: middle;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #f7f7f5;
+      font: inherit;
+      font-weight: 500;
+      padding: 0.7rem 1.25rem;
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+
+    .results {
+      display: grid;
+      gap: 1.25rem;
+      margin-top: 2rem;
+    }
+
+    @media (min-width: 720px) {
+      .results { grid-template-columns: 1fr 1fr; }
+    }
+
+    .panel {
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+    }
+
+    .panel h3 {
+      margin: 0 0 0.5rem;
+      font-size: 1rem;
+    }
+
+    .meta {
+      margin: 0 0 0.75rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+
+    .reply {
+      white-space: pre-wrap;
+      line-height: 1.5;
+      min-height: 1.5rem;
+    }
+
+    .reply.error { color: #8b1e1e; }
+    .reply.empty { color: var(--muted); }
+
+    .echo {
+      margin-top: 0.85rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 02</h1>
+    <p class="sub">Один промпт — два вызова: без ограничений и с контролем через prompt + API.</p>
+
+    <form id="compare-form">
+      <div class="field">
+        <label for="prompt">Промпт (общий)</label>
+        <textarea id="prompt" name="prompt" required placeholder="Объясни, что такое HTTP…"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="model">Модель</label>
+        <select id="model" name="model">
+          <option value="gpt-5.4" selected>gpt-5.4 — баланс качества и цены</option>
+          <option value="gpt-5.4-mini">gpt-5.4-mini — дешевле и быстрее</option>
+          <option value="gpt-5.4-nano">gpt-5.4-nano — самый дешёвый</option>
+          <option value="gpt-5.5">gpt-5.5 — флагман, дороже</option>
+          <option value="gpt-4o">gpt-4o — legacy</option>
+        </select>
+      </div>
+
+      <section class="controls">
+        <h2>Контроль (только запрос B)</h2>
+        <p class="hint">Тег <span class="tag">prompt</span> — в system. Тег <span class="tag">API</span> — параметр Chat Completions.</p>
+
+        <div class="field">
+          <label for="format">Формат ответа <span class="tag">prompt</span></label>
+          <textarea id="format" name="format">Ответь нумерованным списком ровно из 3 пунктов. Без вступления и заключения.</textarea>
+        </div>
+
+        <div class="row three">
+          <div class="field">
+            <label for="max_completion_tokens">max_completion_tokens <span class="tag">API</span></label>
+            <input id="max_completion_tokens" type="number" min="1" value="64">
+          </div>
+          <div class="field">
+            <label for="stop">stop (через |) <span class="tag">API</span></label>
+            <input id="stop" type="text" value="END">
+            <p class="hint">Hard stop API только у gpt-4o. Для GPT-5.x поле игнорируется — используй Soft stop.</p>
+          </div>
+          <div class="field">
+            <label for="temperature">temperature <span class="tag">API</span></label>
+            <input id="temperature" type="number" min="0" max="2" step="0.1" value="1">
+          </div>
+        </div>
+
+        <div class="row two">
+          <div class="field">
+            <label for="response_format">response_format <span class="tag">API</span></label>
+            <select id="response_format">
+              <option value="text" selected>text</option>
+              <option value="json_object">json_object</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="check">
+          <input type="checkbox" id="soft_length" checked>
+          <span>Soft length: «ответь не длиннее 3 предложений» <span class="tag">prompt</span></span>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="soft_stop" checked>
+          <span>Soft stop: «закончи словом END» <span class="tag">prompt</span></span>
+        </label>
+      </section>
+
+      <button type="submit" id="submit">Сравнить</button>
+    </form>
+
+    <div id="global-error" class="reply error" hidden></div>
+
+    <div class="results">
+      <section class="panel">
+        <h3>A — без ограничений</h3>
+        <p id="meta-a" class="meta"></p>
+        <div id="reply-a" class="reply empty">Ответ появится здесь.</div>
+      </section>
+      <section class="panel">
+        <h3>B — с контролем</h3>
+        <p id="meta-b" class="meta"></p>
+        <div id="reply-b" class="reply empty">Ответ появится здесь.</div>
+        <pre id="echo-b" class="echo"></pre>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const form = document.getElementById("compare-form");
+    const submitBtn = document.getElementById("submit");
+    const globalError = document.getElementById("global-error");
+
+    function formatUsage(usage) {
+      if (!usage) return "";
+      const parts = [];
+      if (usage.prompt_tokens != null) parts.push("prompt " + usage.prompt_tokens);
+      if (usage.completion_tokens != null) parts.push("completion " + usage.completion_tokens);
+      if (usage.total_tokens != null) parts.push("total " + usage.total_tokens);
+      return parts.join(" · ");
+    }
+
+    function showSide(prefix, data) {
+      const replyEl = document.getElementById("reply-" + prefix);
+      const metaEl = document.getElementById("meta-" + prefix);
+      replyEl.className = "reply";
+      replyEl.textContent = data.reply || "(пустой ответ)";
+      metaEl.textContent = "finish_reason: " + (data.finish_reason || "—")
+        + (formatUsage(data.usage) ? "\n" + formatUsage(data.usage) : "");
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      globalError.hidden = true;
+      submitBtn.disabled = true;
+
+      document.getElementById("reply-a").className = "reply empty";
+      document.getElementById("reply-b").className = "reply empty";
+      document.getElementById("reply-a").textContent = "Жду ответ…";
+      document.getElementById("reply-b").textContent = "Жду ответ…";
+      document.getElementById("meta-a").textContent = "";
+      document.getElementById("meta-b").textContent = "";
+      document.getElementById("echo-b").textContent = "";
+
+      const body = {
+        prompt: document.getElementById("prompt").value.trim(),
+        model: document.getElementById("model").value,
+        controls: {
+          format: document.getElementById("format").value,
+          max_completion_tokens: document.getElementById("max_completion_tokens").value,
+          stop: document.getElementById("stop").value,
+          temperature: document.getElementById("temperature").value,
+          response_format: document.getElementById("response_format").value,
+          soft_length: document.getElementById("soft_length").checked,
+          soft_stop: document.getElementById("soft_stop").checked,
+        },
+      };
+
+      try {
+        const res = await fetch("/api/compare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          globalError.hidden = false;
+          globalError.textContent = data.error || "Request failed";
+          document.getElementById("reply-a").textContent = "—";
+          document.getElementById("reply-b").textContent = "—";
+          return;
+        }
+        showSide("a", data.unconstrained);
+        showSide("b", data.controlled);
+        const echo = data.controlled.request_echo || {};
+        document.getElementById("echo-b").textContent =
+          "request_echo.system:\n" + (echo.system || "(пусто)")
+          + "\n\nrequest_echo.api:\n" + JSON.stringify(echo.api || {}, null, 2);
+      } catch (err) {
+        globalError.hidden = false;
+        globalError.textContent = String(err);
+        document.getElementById("reply-a").textContent = "—";
+        document.getElementById("reply-b").textContent = "—";
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
