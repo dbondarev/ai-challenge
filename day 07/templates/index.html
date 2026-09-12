@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 07 — контекст диалога</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+  <style>
+    :root {
+      --ink: #1a1a1a;
+      --muted: #5c5c5c;
+      --line: #d6d2cb;
+      --accent: #1f4d3a;
+      --accent-hover: #16392b;
+      --surface: #fffdf9;
+      --user-bg: #e8ebe4;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse at top left, #ebe6dc 0%, transparent 55%),
+        linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+
+    main {
+      max-width: 44rem;
+      margin: 0 auto;
+      padding: 3rem 1.25rem 4rem;
+    }
+
+    h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.75rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .sub {
+      margin: 0 0 1.5rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .field { margin-bottom: 1rem; }
+
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--ink);
+      font: inherit;
+      padding: 0.75rem 0.85rem;
+    }
+
+    textarea#role { min-height: 3.5rem; }
+    textarea#prompt { min-height: 5rem; resize: vertical; line-height: 1.45; }
+    select { cursor: pointer; }
+
+    .hint {
+      margin: 0.4rem 0 0;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #f7f7f5;
+      font: inherit;
+      font-weight: 500;
+      padding: 0.7rem 1.25rem;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button.secondary:hover:not(:disabled) { background: var(--user-bg); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+
+    #thread {
+      margin: 1.75rem 0 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+
+    .bubble {
+      padding: 0.85rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      line-height: 1.55;
+    }
+
+    .bubble.user { background: var(--user-bg); }
+    .bubble .who {
+      margin: 0 0 0.4rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+
+    .bubble.md > *:first-child { margin-top: 0; }
+    .bubble.md > *:last-child { margin-bottom: 0; }
+    .bubble.md p { margin: 0.5rem 0; }
+    .bubble.md ul, .bubble.md ol { margin: 0.4rem 0; padding-left: 1.3rem; }
+    .bubble.md code {
+      font-family: ui-monospace, monospace;
+      font-size: 0.9em;
+      background: #ebe6dc;
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+    }
+    .bubble.md pre {
+      margin: 0.6rem 0;
+      padding: 0.75rem 0.9rem;
+      overflow-x: auto;
+      background: #1f2421;
+      color: #f2f4f1;
+      border-radius: 6px;
+    }
+    .bubble.md pre code { background: transparent; padding: 0; color: inherit; }
+
+    #meta {
+      margin-top: 0.75rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+
+    #global-error {
+      margin-top: 0.75rem;
+      color: #8b1e1e;
+      white-space: pre-wrap;
+    }
+
+    .empty-thread {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 07</h1>
+    <p class="sub">Агент сохраняет историю в <code>history.json</code> и восстанавливает её после перезапуска.</p>
+
+    <form id="chat-form">
+      <div class="field">
+        <label for="role">Роль агента</label>
+        <textarea id="role" name="role">Ты — полезный ассистент. Отвечай ясно и по существу. Помни факты из предыдущих сообщений диалога.</textarea>
+      </div>
+
+      <div class="field">
+        <label for="model">Модель</label>
+        <select id="model" name="model">
+          <option value="gpt-5.4" selected>gpt-5.4</option>
+          <option value="gpt-5.4-mini">gpt-5.4-mini</option>
+          <option value="gpt-5.4-nano">gpt-5.4-nano</option>
+          <option value="gpt-5.5">gpt-5.5</option>
+          <option value="gpt-4o">gpt-4o</option>
+        </select>
+      </div>
+
+      <div id="thread"><p class="empty-thread">Загрузка истории…</p></div>
+
+      <div class="field">
+        <label for="prompt">Сообщение</label>
+        <textarea id="prompt" name="prompt" required placeholder="Продолжи диалог…"></textarea>
+      </div>
+
+      <div class="actions">
+        <button type="submit" id="submit">Отправить</button>
+        <button type="button" class="secondary" id="reset">Очистить историю</button>
+      </div>
+    </form>
+
+    <div id="meta"></div>
+    <div id="global-error" hidden></div>
+  </main>
+
+  <script>
+    marked.setOptions({ breaks: true, gfm: true });
+
+    const threadEl = document.getElementById("thread");
+    const form = document.getElementById("chat-form");
+    const submitBtn = document.getElementById("submit");
+    const resetBtn = document.getElementById("reset");
+    const metaEl = document.getElementById("meta");
+    const errorEl = document.getElementById("global-error");
+    const roleEl = document.getElementById("role");
+    const modelEl = document.getElementById("model");
+    const promptEl = document.getElementById("prompt");
+
+    function showError(text) {
+      errorEl.hidden = !text;
+      errorEl.textContent = text || "";
+    }
+
+    function renderThread(messages) {
+      threadEl.innerHTML = "";
+      if (!messages || !messages.length) {
+        threadEl.innerHTML = '<p class="empty-thread">История пуста. Начни диалог — он сохранится на диск.</p>';
+        return;
+      }
+      messages.forEach((msg) => {
+        const bubble = document.createElement("div");
+        bubble.className = "bubble " + (msg.role === "user" ? "user" : "md");
+        const who = document.createElement("p");
+        who.className = "who";
+        who.textContent = msg.role === "user" ? "Вы" : "Агент";
+        bubble.appendChild(who);
+        if (msg.role === "assistant") {
+          const body = document.createElement("div");
+          body.innerHTML = marked.parse(msg.content || "");
+          bubble.appendChild(body);
+        } else {
+          const body = document.createElement("div");
+          body.style.whiteSpace = "pre-wrap";
+          body.textContent = msg.content || "";
+          bubble.appendChild(body);
+        }
+        threadEl.appendChild(bubble);
+      });
+      bubbleScroll();
+    }
+
+    function bubbleScroll() {
+      const last = threadEl.lastElementChild;
+      if (last) last.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    async function loadHistory() {
+      showError("");
+      try {
+        const res = await fetch("/api/history");
+        const data = await res.json();
+        if (!res.ok) {
+          showError(data.error || "Failed to load history");
+          threadEl.innerHTML = '<p class="empty-thread">Не удалось загрузить историю.</p>';
+          return;
+        }
+        if (data.role) roleEl.value = data.role;
+        if (data.model) modelEl.value = data.model;
+        renderThread(data.messages || []);
+        metaEl.textContent = "messages: " + ((data.messages || []).length);
+      } catch (err) {
+        showError(String(err));
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      showError("");
+      submitBtn.disabled = true;
+      resetBtn.disabled = true;
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: promptEl.value.trim(),
+            model: modelEl.value,
+            role: roleEl.value.trim(),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showError(data.error || "Request failed");
+          return;
+        }
+        promptEl.value = "";
+        renderThread(data.messages || []);
+        const u = data.usage || {};
+        metaEl.textContent =
+          "model: " + (data.model || "—")
+          + " · finish_reason: " + (data.finish_reason || "—")
+          + "\nmessages: " + ((data.messages || []).length)
+          + "\ntokens: prompt " + (u.prompt_tokens ?? "—")
+          + " · completion " + (u.completion_tokens ?? "—")
+          + " · total " + (u.total_tokens ?? "—");
+      } catch (err) {
+        showError(String(err));
+      } finally {
+        submitBtn.disabled = false;
+        resetBtn.disabled = false;
+      }
+    });
+
+    resetBtn.addEventListener("click", async () => {
+      if (!confirm("Очистить сохранённую историю?")) return;
+      showError("");
+      resetBtn.disabled = true;
+      try {
+        const res = await fetch("/api/reset", { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) {
+          showError(data.error || "Reset failed");
+          return;
+        }
+        renderThread(data.messages || []);
+        metaEl.textContent = "messages: 0";
+      } catch (err) {
+        showError(String(err));
+      } finally {
+        resetBtn.disabled = false;
+      }
+    });
+
+    loadHistory();
+  </script>
+</body>
+</html>

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 09 — Full vs Compressed</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+  <style>
+    :root {
+      --ink: #1a1a1a; --muted: #5c5c5c; --line: #d6d2cb; --accent: #1f4d3a;
+      --accent-hover: #16392b; --surface: #fffdf9; --user-bg: #e8ebe4; --warn: #8b1e1e;
+      --full: #1f4d3a; --comp: #3d4a6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; font-family: "IBM Plex Sans", "Segoe UI", sans-serif; color: var(--ink);
+      background: radial-gradient(ellipse at top left, #ebe6dc 0%, transparent 55%),
+        linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+    main { max-width: 96rem; margin: 0 auto; padding: 1.5rem 1.1rem 3rem; }
+    h1 { margin: 0 0 0.25rem; font-size: 1.55rem; font-weight: 600; }
+    .sub { margin: 0 0 1rem; color: var(--muted); font-size: 0.92rem; }
+    .controls { display: grid; gap: 0.7rem; margin-bottom: 1rem; }
+    @media (min-width: 900px) {
+      .controls { grid-template-columns: 1.4fr 1fr 1fr auto auto; align-items: end; }
+    }
+    label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--muted); }
+    textarea, select, input[type="number"] {
+      width: 100%; border: 1px solid var(--line); border-radius: 6px;
+      background: var(--surface); color: var(--ink); font: inherit; padding: 0.55rem 0.7rem;
+    }
+    textarea#role { min-height: 2.6rem; }
+    textarea#prompt { min-height: 4rem; resize: vertical; }
+    .hint { margin: 0.25rem 0 0; font-size: 0.78rem; color: var(--muted); }
+    .actions, .presets { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.55rem 0; }
+    button {
+      appearance: none; border: 0; border-radius: 6px; background: var(--accent);
+      color: #f7f7f5; font: inherit; font-weight: 500; padding: 0.55rem 0.95rem; cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button.secondary:hover:not(:disabled) { background: var(--user-bg); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+
+    .compare-top {
+      display: grid; gap: 0.75rem; margin-bottom: 0.85rem;
+    }
+    @media (min-width: 900px) { .compare-top { grid-template-columns: 1fr 1fr; } }
+    .tok-card {
+      border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+      padding: 0.75rem 0.9rem;
+    }
+    .tok-card h2 { margin: 0 0 0.45rem; font-size: 0.95rem; }
+    .tok-card.full h2 { color: var(--full); }
+    .tok-card.comp h2 { color: var(--comp); }
+    .tok-card dl {
+      margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.65rem; font-size: 0.82rem;
+    }
+    .tok-card dt { color: var(--muted); }
+    .tok-card dd { margin: 0; font-variant-numeric: tabular-nums; }
+    .tok-card dd.warn { color: var(--warn); font-weight: 600; }
+    .saved {
+      margin: 0 0 0.85rem; font-size: 0.85rem; color: var(--muted);
+    }
+
+    .split {
+      display: grid; gap: 0.85rem; margin-bottom: 1rem;
+    }
+    @media (min-width: 900px) { .split { grid-template-columns: 1fr 1fr; align-items: stretch; } }
+    .lane {
+      border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+      display: flex; flex-direction: column; min-height: 22rem;
+    }
+    .lane-head {
+      padding: 0.65rem 0.85rem; border-bottom: 1px solid var(--line);
+      font-weight: 600; font-size: 0.92rem;
+    }
+    .lane.full .lane-head { color: var(--full); }
+    .lane.comp .lane-head { color: var(--comp); }
+    .thread {
+      flex: 1; overflow: auto; max-height: 28rem; padding: 0.7rem;
+      display: flex; flex-direction: column; gap: 0.55rem;
+    }
+    .bubble { padding: 0.65rem 0.8rem; border-radius: 8px; border: 1px solid var(--line); line-height: 1.45; background: #fff; }
+    .bubble.user { background: var(--user-bg); }
+    .bubble .who { margin: 0 0 0.25rem; font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+    .bubble.md p { margin: 0.35rem 0; }
+    .bubble.md code { font-family: ui-monospace, monospace; font-size: 0.86em; background: #ebe6dc; padding: 0.1rem 0.3rem; border-radius: 4px; }
+    .bubble.md pre { margin: 0.4rem 0; padding: 0.55rem 0.7rem; overflow-x: auto; background: #1f2421; color: #f2f4f1; border-radius: 6px; }
+    .empty-thread { color: var(--muted); font-size: 0.88rem; padding: 0.5rem; }
+
+    details.payload {
+      border-top: 1px solid var(--line); padding: 0.45rem 0.75rem 0.65rem;
+      font-size: 0.8rem;
+    }
+    details.payload summary { cursor: pointer; color: var(--muted); user-select: none; }
+    details.payload pre {
+      margin: 0.45rem 0 0; max-height: 14rem; overflow: auto;
+      background: #1f2421; color: #e8ebe6; padding: 0.65rem 0.75rem;
+      border-radius: 6px; white-space: pre-wrap; word-break: break-word;
+      font-family: ui-monospace, monospace; font-size: 0.75rem;
+    }
+
+    .bottom { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 0.85rem; }
+    .summary-box {
+      margin-top: 0.55rem; padding: 0.6rem 0.75rem; border: 1px dashed var(--line);
+      border-radius: 6px; white-space: pre-wrap; font-size: 0.84rem; min-height: 2.5rem;
+    }
+    #global-error { margin-top: 0.65rem; color: var(--warn); white-space: pre-wrap; font-size: 0.9rem; }
+    table.growth { width: 100%; border-collapse: collapse; margin-top: 0.55rem; font-size: 0.76rem; }
+    table.growth th, table.growth td { border-bottom: 1px solid var(--line); padding: 0.28rem; text-align: right; }
+    table.growth th:first-child, table.growth td:first-child { text-align: left; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 09 — split compare</h1>
+    <p class="sub">Один ввод · два ответа: слева полный контекст, справа сжатие (summary + last N). Токены и payload API — для обеих сторон.</p>
+
+    <form id="chat-form">
+      <div class="controls">
+        <div>
+          <label for="role">Роль</label>
+          <textarea id="role">Ты — полезный ассистент. Отвечай кратко.</textarea>
+        </div>
+        <div>
+          <label for="model">Модель</label>
+          <select id="model">
+            <option value="gpt-5.4" selected>gpt-5.4</option>
+            <option value="gpt-5.4-mini">gpt-5.4-mini</option>
+            <option value="gpt-5.4-nano">gpt-5.4-nano</option>
+            <option value="gpt-5.5">gpt-5.5</option>
+            <option value="gpt-4o">gpt-4o</option>
+          </select>
+        </div>
+        <div>
+          <label for="context_limit">Демо context_limit</label>
+          <input id="context_limit" type="number" min="64" value="8192">
+        </div>
+        <div>
+          <label for="keep_last">keep_last</label>
+          <input id="keep_last" type="number" min="1" value="6">
+        </div>
+        <div>
+          <label for="summarize_every">summarize_every</label>
+          <input id="summarize_every" type="number" min="2" value="10">
+        </div>
+      </div>
+
+      <div class="compare-top">
+        <div class="tok-card full">
+          <h2>Full — без сжатия</h2>
+          <dl>
+            <dt>prompt est.</dt><dd id="tf-prompt">—</dd>
+            <dt>API prompt/compl</dt><dd id="tf-api">—</dd>
+            <dt>cost</dt><dd id="tf-cost">—</dd>
+            <dt>msgs in request</dt><dd id="tf-msgs">—</dd>
+            <dt>over limit</dt><dd id="tf-over">—</dd>
+          </dl>
+        </div>
+        <div class="tok-card comp">
+          <h2>Compressed — summary + last N</h2>
+          <dl>
+            <dt>prompt est.</dt><dd id="tc-prompt">—</dd>
+            <dt>API prompt/compl</dt><dd id="tc-api">—</dd>
+            <dt>cost</dt><dd id="tc-cost">—</dd>
+            <dt>msgs in request</dt><dd id="tc-msgs">—</dd>
+            <dt>over limit</dt><dd id="tc-over">—</dd>
+          </dl>
+        </div>
+      </div>
+      <p class="saved">Экономия prompt (est.): <strong id="t-saved">—</strong> tok · summary chars: <span id="t-sumchars">0</span></p>
+
+      <div class="split">
+        <section class="lane full">
+          <div class="lane-head">Full context</div>
+          <div class="thread" id="thread-full"></div>
+          <details class="payload">
+            <summary>Запрос в API (full) — развернуть</summary>
+            <pre id="payload-full">(ещё не отправляли)</pre>
+          </details>
+        </section>
+        <section class="lane comp">
+          <div class="lane-head">Compressed context</div>
+          <div class="thread" id="thread-comp"></div>
+          <details class="payload">
+            <summary>Запрос в API (compressed) — развернуть</summary>
+            <pre id="payload-comp">(ещё не отправляли)</pre>
+          </details>
+        </section>
+      </div>
+
+      <div class="bottom">
+        <div class="presets">
+          <button type="button" class="secondary" id="preset-fact">Факт в начале</button>
+          <button type="button" class="secondary" id="preset-long">Длинное сообщение</button>
+        </div>
+        <div class="field">
+          <label for="prompt">Общее сообщение (уходит в оба трека)</label>
+          <textarea id="prompt" required placeholder="Один промпт → два ответа…"></textarea>
+        </div>
+        <div class="actions">
+          <button type="submit" id="submit">Отправить в оба</button>
+          <button type="button" class="secondary" id="compress">Сжать сейчас (правый)</button>
+          <button type="button" class="secondary" id="reset">Очистить</button>
+        </div>
+        <div>
+          <label>Summary (только compressed)</label>
+          <div class="summary-box" id="summary-box">(пусто)</div>
+        </div>
+        <table class="growth">
+          <thead>
+            <tr><th>#</th><th>kind</th><th>full est</th><th>comp est</th><th>saved</th><th>full $</th><th>comp $</th></tr>
+          </thead>
+          <tbody id="growth-body"><tr><td colspan="7" style="text-align:left;color:#5c5c5c">Пока нет ходов</td></tr></tbody>
+        </table>
+        <div id="global-error" hidden></div>
+      </div>
+    </form>
+  </main>
+  <script>
+    marked.setOptions({ breaks: true, gfm: true });
+    const FILLER = "Это учебный абзац для разгона токенов в диалоге. Мы сравниваем полный контекст и сжатый summary. ";
+    const els = {
+      form: document.getElementById("chat-form"),
+      role: document.getElementById("role"),
+      model: document.getElementById("model"),
+      limit: document.getElementById("context_limit"),
+      keep: document.getElementById("keep_last"),
+      every: document.getElementById("summarize_every"),
+      prompt: document.getElementById("prompt"),
+      submit: document.getElementById("submit"),
+      compress: document.getElementById("compress"),
+      reset: document.getElementById("reset"),
+      error: document.getElementById("global-error"),
+      threadFull: document.getElementById("thread-full"),
+      threadComp: document.getElementById("thread-comp"),
+      payloadFull: document.getElementById("payload-full"),
+      payloadComp: document.getElementById("payload-comp"),
+      summary: document.getElementById("summary-box"),
+      growth: document.getElementById("growth-body"),
+    };
+
+    function showError(text) {
+      els.error.hidden = !text;
+      els.error.textContent = text || "";
+    }
+    function repeatFiller(n) {
+      return Array.from({ length: n }, () => FILLER).join(" ");
+    }
+    function fmt(n) {
+      return n == null ? "—" : Number(n).toLocaleString("en-US");
+    }
+
+    function renderThread(el, messages) {
+      el.innerHTML = "";
+      if (!messages || !messages.length) {
+        el.innerHTML = '<p class="empty-thread">Пусто</p>';
+        return;
+      }
+      messages.forEach((msg) => {
+        const bubble = document.createElement("div");
+        bubble.className = "bubble " + (msg.role === "user" ? "user" : "md");
+        const who = document.createElement("p");
+        who.className = "who";
+        who.textContent = msg.role === "user" ? "Вы" : "Агент";
+        bubble.appendChild(who);
+        const body = document.createElement("div");
+        if (msg.role === "assistant") body.innerHTML = marked.parse(msg.content || "");
+        else {
+          body.style.whiteSpace = "pre-wrap";
+          const t = msg.content || "";
+          body.textContent = t.length > 700 ? t.slice(0, 700) + "…" : t;
+        }
+        bubble.appendChild(body);
+        el.appendChild(bubble);
+      });
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function renderSideTokens(prefix, t) {
+      t = t || {};
+      document.getElementById(prefix + "-prompt").textContent = fmt(t.prompt_estimate);
+      document.getElementById(prefix + "-api").textContent =
+        fmt(t.prompt_tokens) + " / " + fmt(t.completion_tokens);
+      document.getElementById(prefix + "-cost").textContent =
+        t.cost_usd != null ? "$" + Number(t.cost_usd).toFixed(6) : "—";
+      document.getElementById(prefix + "-msgs").textContent = fmt(t.message_count);
+      const over = document.getElementById(prefix + "-over");
+      over.textContent = t.over_limit ? "YES" : "no";
+      over.className = t.over_limit ? "warn" : "";
+    }
+
+    function renderPayload(el, messages) {
+      if (!messages || !messages.length) {
+        el.textContent = "(ещё не отправляли)";
+        return;
+      }
+      el.textContent = JSON.stringify(messages, null, 2);
+    }
+
+    function renderGrowth(log) {
+      els.growth.innerHTML = "";
+      if (!log || !log.length) {
+        els.growth.innerHTML = '<tr><td colspan="7" style="text-align:left;color:#5c5c5c">Пока нет ходов</td></tr>';
+        return;
+      }
+      log.slice().reverse().slice(0, 25).forEach((row) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = "<td>" + (row.turn ?? "") + "</td>"
+          + "<td>" + (row.kind || "") + "</td>"
+          + "<td>" + fmt(row.full_prompt_estimate ?? row.prompt_estimate) + "</td>"
+          + "<td>" + fmt(row.comp_prompt_estimate) + "</td>"
+          + "<td>" + fmt(row.tokens_saved_estimate) + "</td>"
+          + "<td>" + (row.full_cost_usd != null ? Number(row.full_cost_usd).toFixed(5) : (row.cost_usd != null ? Number(row.cost_usd).toFixed(5) : "—")) + "</td>"
+          + "<td>" + (row.comp_cost_usd != null ? Number(row.comp_cost_usd).toFixed(5) : "—") + "</td>";
+        els.growth.appendChild(tr);
+      });
+    }
+
+    function applySnapshot(data) {
+      if (data.role != null) els.role.value = data.role;
+      if (data.model) els.model.value = data.model;
+      if (data.context_limit) els.limit.value = data.context_limit;
+      if (data.keep_last) els.keep.value = data.keep_last;
+      if (data.summarize_every) els.every.value = data.summarize_every;
+
+      renderThread(els.threadFull, data.messages_full || []);
+      renderThread(els.threadComp, data.messages_comp || []);
+
+      const tokens = data.tokens || {};
+      const fullTok = data.full && data.full.tokens ? data.full.tokens : (tokens.full || {});
+      const compTok = data.compressed && data.compressed.tokens ? data.compressed.tokens : (tokens.compressed || {});
+      renderSideTokens("tf", fullTok);
+      renderSideTokens("tc", compTok);
+      document.getElementById("t-saved").textContent = fmt(tokens.tokens_saved_estimate);
+      document.getElementById("t-sumchars").textContent = fmt(tokens.summary_chars ?? (data.summary || "").length);
+
+      renderPayload(els.payloadFull, data.last_payload_full || (data.full && data.full.api_messages));
+      renderPayload(els.payloadComp, data.last_payload_comp || (data.compressed && data.compressed.api_messages));
+      els.summary.textContent = (data.summary && data.summary.trim()) ? data.summary : "(пусто)";
+      renderGrowth(data.usage_log || []);
+    }
+
+    async function loadHistory() {
+      showError("");
+      try {
+        const res = await fetch("/api/history");
+        const data = await res.json();
+        if (!res.ok) { showError(data.error || "Failed"); return; }
+        applySnapshot(data);
+      } catch (e) { showError(String(e)); }
+    }
+
+    document.getElementById("preset-fact").onclick = () => {
+      els.prompt.value = "Запомни: мой секретный код проекта — ALTAIR-42. Подтверди одним словом.";
+    };
+    document.getElementById("preset-long").onclick = () => {
+      els.prompt.value = "Кратко: о чём этот текст?\n\n" + repeatFiller(20);
+    };
+
+    els.form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      showError("");
+      els.submit.disabled = true;
+      els.compress.disabled = true;
+      els.reset.disabled = true;
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: els.prompt.value.trim(),
+            model: els.model.value,
+            role: els.role.value.trim(),
+            context_limit: Number(els.limit.value),
+            keep_last: Number(els.keep.value),
+            summarize_every: Number(els.every.value),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showError(data.error || "Request failed");
+          if (data.tokens) applySnapshot({ ...data, tokens: { full: data.tokens.full, compressed: data.tokens.compressed, tokens_saved_estimate: 0 } });
+          return;
+        }
+        els.prompt.value = "";
+        applySnapshot(data);
+        const warns = [];
+        if (data.full && !data.full.ok) warns.push("Full: " + data.full.error);
+        if (data.compressed && !data.compressed.ok) warns.push("Compressed: " + data.compressed.error);
+        if (warns.length) showError(warns.join("\n"));
+      } catch (e) {
+        showError(String(e));
+      } finally {
+        els.submit.disabled = false;
+        els.compress.disabled = false;
+        els.reset.disabled = false;
+      }
+    });
+
+    els.compress.addEventListener("click", async () => {
+      showError("");
+      els.compress.disabled = true;
+      try {
+        const res = await fetch("/api/compress", { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) { showError(data.error || "Compress failed"); return; }
+        applySnapshot(data);
+      } catch (e) { showError(String(e)); }
+      finally { els.compress.disabled = false; }
+    });
+
+    els.reset.addEventListener("click", async () => {
+      if (!confirm("Очистить оба трека и summary?")) return;
+      const res = await fetch("/api/reset", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { showError(data.error || "Reset failed"); return; }
+      applySnapshot(data);
+      showError("");
+    });
+
+    loadHistory();
+  </script>
+</body>
+</html>

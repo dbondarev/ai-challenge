@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 10 — стратегии контекста</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+  <style>
+    :root {
+      --ink: #1a1a1a; --muted: #5c5c5c; --line: #d6d2cb; --accent: #1f4d3a;
+      --accent-hover: #16392b; --surface: #fffdf9; --user-bg: #e8ebe4; --warn: #8b1e1e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; font-family: "IBM Plex Sans", "Segoe UI", sans-serif; color: var(--ink);
+      background: radial-gradient(ellipse at top left, #ebe6dc 0%, transparent 55%),
+        linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+    main { max-width: 76rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+    h1 { margin: 0 0 0.35rem; font-size: 1.75rem; font-weight: 600; }
+    .sub { margin: 0 0 1.25rem; color: var(--muted); font-size: 0.95rem; }
+    .layout { display: grid; gap: 1.5rem; }
+    @media (min-width: 980px) { .layout { grid-template-columns: 1.35fr 1fr; align-items: start; } }
+    label { display: block; margin-bottom: 0.3rem; font-size: 0.85rem; color: var(--muted); }
+    .field { margin-bottom: 0.8rem; }
+    .row { display: grid; gap: 0.75rem; }
+    @media (min-width: 640px) {
+      .row.three { grid-template-columns: 1fr 1fr 1fr; }
+      .row.two { grid-template-columns: 1fr 1fr; }
+      .row.four { grid-template-columns: 1fr 1fr 1fr 1fr; }
+    }
+    textarea, select, input[type="number"], input[type="text"] {
+      width: 100%; border: 1px solid var(--line); border-radius: 6px;
+      background: var(--surface); color: var(--ink); font: inherit; padding: 0.65rem 0.75rem;
+    }
+    textarea#role { min-height: 3rem; }
+    textarea#prompt { min-height: 4.5rem; resize: vertical; }
+    .hint { margin: 0.3rem 0 0; font-size: 0.78rem; color: var(--muted); }
+    .actions, .presets { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
+    button {
+      appearance: none; border: 0; border-radius: 6px; background: var(--accent);
+      color: #f7f7f5; font: inherit; font-weight: 500; padding: 0.6rem 1rem; cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button.secondary:hover:not(:disabled) { background: var(--user-bg); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+    #thread { margin: 0.85rem 0; display: flex; flex-direction: column; gap: 0.7rem; max-height: 24rem; overflow: auto; }
+    .bubble { padding: 0.75rem 0.9rem; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); line-height: 1.5; }
+    .bubble.user { background: var(--user-bg); }
+    .bubble .who { margin: 0 0 0.3rem; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+    .bubble.md p { margin: 0.4rem 0; }
+    .bubble.md code { font-family: ui-monospace, monospace; font-size: 0.88em; background: #ebe6dc; padding: 0.1rem 0.3rem; border-radius: 4px; }
+    .bubble.md pre { margin: 0.45rem 0; padding: 0.65rem 0.8rem; overflow-x: auto; background: #1f2421; color: #f2f4f1; border-radius: 6px; }
+    .panel { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 1rem; margin-bottom: 1rem; }
+    .panel h2 { margin: 0 0 0.65rem; font-size: 1rem; }
+    .panel dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 0.7rem; font-size: 0.85rem; }
+    .panel dt { color: var(--muted); }
+    .panel dd { margin: 0; font-variant-numeric: tabular-nums; }
+    .panel dd.warn { color: var(--warn); font-weight: 600; }
+    .strategy-params { display: none; }
+    .strategy-params.visible { display: block; }
+    table.facts, table.growth, table.branches {
+      width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.82rem;
+    }
+    table.facts th, table.facts td, table.growth th, table.growth td,
+    table.branches th, table.branches td {
+      border-bottom: 1px solid var(--line); padding: 0.35rem; text-align: left; vertical-align: top;
+    }
+    table.growth th, table.growth td { text-align: right; }
+    table.growth th:first-child, table.growth td:first-child { text-align: left; }
+    table.facts input { width: 100%; padding: 0.35rem 0.45rem; font-size: 0.82rem; }
+    .branch-active { font-weight: 600; }
+    #global-error { margin-top: 0.7rem; color: var(--warn); white-space: pre-wrap; font-size: 0.9rem; }
+    .empty-thread { color: var(--muted); font-size: 0.9rem; }
+    .scenario {
+      margin: 0 0 1rem; padding: 0.75rem 0.9rem; border: 1px dashed var(--line);
+      border-radius: 8px; background: rgba(255,253,249,0.7); font-size: 0.85rem; color: var(--muted); line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 10</h1>
+    <p class="sub">Три стратегии контекста без summary: Sliding Window, Sticky Facts, Branching. <a href="/compare">Режим сравнения →</a></p>
+    <div class="scenario">
+      <strong>Сценарий ТЗ:</strong> одинаковый старт «Собираем ТЗ на лендинг…», 10–15 ходов по чеклисту из README,
+      прогон на каждой стратегии (reset между прогонами) или открой <a href="/compare">сравнение в 3 колонки</a>.
+    </div>
+    <div class="layout">
+      <section>
+        <form id="chat-form">
+          <div class="field">
+            <label for="role">Роль агента</label>
+            <textarea id="role">Ты — полезный ассистент. Отвечай кратко. Учитывай переданный контекст стратегии.</textarea>
+          </div>
+          <div class="row three">
+            <div class="field">
+              <label for="model">Модель</label>
+              <select id="model">
+                <option value="gpt-5.4" selected>gpt-5.4</option>
+                <option value="gpt-5.4-mini">gpt-5.4-mini</option>
+                <option value="gpt-5.4-nano">gpt-5.4-nano</option>
+                <option value="gpt-5.5">gpt-5.5</option>
+                <option value="gpt-4o">gpt-4o</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="strategy">Стратегия</label>
+              <select id="strategy">
+                <option value="sliding" selected>Sliding Window</option>
+                <option value="facts">Sticky Facts</option>
+                <option value="branching">Branching</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="context_limit">Демо context_limit</label>
+              <input id="context_limit" type="number" min="64" value="2048">
+            </div>
+          </div>
+
+          <div id="params-sliding" class="strategy-params">
+            <div class="field" style="max-width:12rem">
+              <label for="window_size">window_size</label>
+              <input id="window_size" type="number" min="1" value="8">
+              <p class="hint">В API уходят только последние N; полная лента хранится в messages_full.</p>
+            </div>
+          </div>
+
+          <div id="params-facts" class="strategy-params">
+            <div class="field" style="max-width:12rem">
+              <label for="facts_window">facts_window</label>
+              <input id="facts_window" type="number" min="1" value="6">
+              <p class="hint">API: role + Known facts + последние N сообщений.</p>
+            </div>
+          </div>
+
+          <div id="params-branching" class="strategy-params">
+            <p class="hint">Checkpoint → Fork создаёт ветку от точки; Switch переключает активную ветку.</p>
+            <div class="actions" style="margin-top:0.4rem">
+              <button type="button" class="secondary" id="btn-checkpoint">Checkpoint</button>
+              <input id="branch_name" type="text" placeholder="Имя ветки" style="max-width:10rem;padding:0.5rem 0.65rem">
+              <button type="button" class="secondary" id="btn-fork">Fork</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="prompt">Сообщение</label>
+            <textarea id="prompt" required placeholder="Напиши сообщение…"></textarea>
+          </div>
+          <div class="presets">
+            <button type="button" class="secondary" data-preset="start">Старт ТЗ</button>
+            <button type="button" class="secondary" data-preset="audience">Аудитория</button>
+            <button type="button" class="secondary" data-preset="pages">Страницы</button>
+            <button type="button" class="secondary" data-preset="recall">Проверка деталей</button>
+          </div>
+          <div class="actions">
+            <button type="submit" id="send">Отправить</button>
+            <button type="button" class="secondary" id="reset">Сбросить историю</button>
+          </div>
+        </form>
+        <div id="thread"></div>
+        <div id="global-error"></div>
+      </section>
+
+      <aside>
+        <div class="panel">
+          <h2>Токены (активная стратегия)</h2>
+          <dl>
+            <dt>strategy</dt><dd id="t-strategy">—</dd>
+            <dt>prompt (API)</dt><dd id="t-prompt">—</dd>
+            <dt>если full</dt><dd id="t-full">—</dd>
+            <dt>сэкономлено</dt><dd id="t-saved">—</dd>
+            <dt>limit / over</dt><dd id="t-limit">—</dd>
+            <dt>cost (last)</dt><dd id="t-cost">—</dd>
+          </dl>
+        </div>
+
+        <div class="panel" id="panel-facts">
+          <h2>Sticky Facts</h2>
+          <table class="facts">
+            <thead><tr><th>key</th><th>value</th></tr></thead>
+            <tbody id="facts-body"></tbody>
+          </table>
+          <div class="actions" style="margin-top:0.65rem;margin-bottom:0">
+            <button type="button" class="secondary" id="btn-facts-save">Сохранить facts</button>
+            <button type="button" class="secondary" id="btn-facts-refresh">Переизвлечь</button>
+          </div>
+        </div>
+
+        <div class="panel" id="panel-branches">
+          <h2>Ветки</h2>
+          <table class="branches">
+            <thead><tr><th>ветка</th><th>msgs</th><th></th></tr></thead>
+            <tbody id="branches-body"></tbody>
+          </table>
+          <p class="hint">checkpoint_index: <span id="cp-index">—</span></p>
+        </div>
+
+        <div class="panel">
+          <h2>Usage log</h2>
+          <table class="growth">
+            <thead>
+              <tr><th>#</th><th>kind</th><th>prompt</th><th>full</th><th>saved</th><th>$</th></tr>
+            </thead>
+            <tbody id="usage-body"></tbody>
+          </table>
+        </div>
+      </aside>
+    </div>
+  </main>
+  <script>
+    const FACT_KEYS = ["goal", "constraints", "preferences", "decisions", "other"];
+    const PRESETS = {
+      start: "Собираем ТЗ на лендинг: цель, аудитория, страницы, CTA, тон. Зафиксируй структуру и задай уточняющие вопросы по одному.",
+      audience: "Целевая аудитория: владельцы малого B2B SaaS в ЕС, 5–30 сотрудников. Язык сайта — английский. Бюджет на дизайн средний.",
+      pages: "Нужны страницы: Home, Features, Pricing (3 тарифа), About, Contact. На Pricing — monthly/yearly toggle.",
+      recall: "Кратко перечисли: аудиторию, язык, список страниц и что на Pricing. Если чего-то нет в контексте — скажи честно."
+    };
+
+    const els = {
+      form: document.getElementById("chat-form"),
+      role: document.getElementById("role"),
+      model: document.getElementById("model"),
+      strategy: document.getElementById("strategy"),
+      contextLimit: document.getElementById("context_limit"),
+      windowSize: document.getElementById("window_size"),
+      factsWindow: document.getElementById("facts_window"),
+      branchName: document.getElementById("branch_name"),
+      prompt: document.getElementById("prompt"),
+      send: document.getElementById("send"),
+      reset: document.getElementById("reset"),
+      thread: document.getElementById("thread"),
+      error: document.getElementById("global-error"),
+      factsBody: document.getElementById("facts-body"),
+      branchesBody: document.getElementById("branches-body"),
+      usageBody: document.getElementById("usage-body"),
+      cpIndex: document.getElementById("cp-index"),
+    };
+
+    function showStrategyParams() {
+      const s = els.strategy.value;
+      document.getElementById("params-sliding").classList.toggle("visible", s === "sliding");
+      document.getElementById("params-facts").classList.toggle("visible", s === "facts");
+      document.getElementById("params-branching").classList.toggle("visible", s === "branching");
+    }
+
+    function md(text) {
+      try { return marked.parse(text || ""); }
+      catch { return (text || "").replace(/</g, "&lt;"); }
+    }
+
+    function renderThread(messages) {
+      if (!messages || !messages.length) {
+        els.thread.innerHTML = '<p class="empty-thread">История пуста.</p>';
+        return;
+      }
+      els.thread.innerHTML = messages.map((m) => {
+        const who = m.role === "user" ? "Вы" : "Агент";
+        const cls = m.role === "user" ? "bubble user" : "bubble md";
+        const body = m.role === "assistant" ? md(m.content) : (m.content || "").replace(/</g, "&lt;");
+        return `<div class="${cls}"><p class="who">${who}</p>${body}</div>`;
+      }).join("");
+      els.thread.scrollTop = els.thread.scrollHeight;
+    }
+
+    function renderFacts(facts) {
+      const data = facts || {};
+      const keys = [...new Set([...FACT_KEYS, ...Object.keys(data)])];
+      els.factsBody.innerHTML = keys.map((k) => `
+        <tr>
+          <td><input data-fact-key="${k}" value="${k.replace(/"/g, "&quot;")}" ${FACT_KEYS.includes(k) ? "readonly" : ""}></td>
+          <td><input data-fact-val="${k}" value="${(data[k] || "").replace(/"/g, "&quot;")}"></td>
+        </tr>`).join("");
+    }
+
+    function collectFacts() {
+      const out = {};
+      els.factsBody.querySelectorAll("tr").forEach((tr) => {
+        const keyInp = tr.querySelector("[data-fact-key]");
+        const valInp = tr.querySelector("[data-fact-val]");
+        const k = (keyInp.value || "").trim();
+        const v = (valInp.value || "").trim();
+        if (k && v) out[k] = v;
+      });
+      return out;
+    }
+
+    function renderBranches(snap) {
+      const branches = snap.branches || {};
+      const active = snap.active_branch_id;
+      const rows = Object.values(branches);
+      if (!rows.length) {
+        els.branchesBody.innerHTML = "<tr><td colspan=3>—</td></tr>";
+      } else {
+        els.branchesBody.innerHTML = rows.map((b) => `
+          <tr class="${b.id === active ? "branch-active" : ""}">
+            <td>${b.name} <span style="color:var(--muted);font-size:0.75rem">(${b.id})</span></td>
+            <td>${b.message_count}</td>
+            <td>${b.id === active ? "active" : `<button type="button" class="secondary btn-switch" data-id="${b.id}">Switch</button>`}</td>
+          </tr>`).join("");
+      }
+      els.cpIndex.textContent = snap.checkpoint_index == null ? "—" : String(snap.checkpoint_index);
+      els.branchesBody.querySelectorAll(".btn-switch").forEach((btn) => {
+        btn.addEventListener("click", () => switchBranch(btn.dataset.id));
+      });
+    }
+
+    function renderTokens(tokens) {
+      const t = tokens || {};
+      document.getElementById("t-strategy").textContent = t.strategy || "—";
+      document.getElementById("t-prompt").textContent = t.prompt_estimate ?? "—";
+      document.getElementById("t-full").textContent = t.prompt_estimate_if_full ?? "—";
+      document.getElementById("t-saved").textContent = t.tokens_saved_vs_full ?? "—";
+      const over = t.over_limit ? "YES" : "no";
+      const limitEl = document.getElementById("t-limit");
+      limitEl.textContent = `${t.context_limit ?? "—"} / ${over}`;
+      limitEl.classList.toggle("warn", !!t.over_limit);
+      document.getElementById("t-cost").textContent = t.cost_usd != null ? Number(t.cost_usd).toFixed(6) : "—";
+    }
+
+    function renderUsage(log) {
+      const rows = (log || []).slice().reverse().slice(0, 20);
+      els.usageBody.innerHTML = rows.map((u) => `
+        <tr>
+          <td>${u.turn ?? ""}</td>
+          <td>${u.kind || u.strategy || "chat"}</td>
+          <td>${u.prompt_tokens ?? u.prompt_estimate ?? "—"}</td>
+          <td>${u.prompt_estimate_if_full ?? "—"}</td>
+          <td>${u.tokens_saved_vs_full ?? "—"}</td>
+          <td>${u.cost_usd != null ? Number(u.cost_usd).toFixed(5) : "—"}</td>
+        </tr>`).join("") || "<tr><td colspan=6>—</td></tr>";
+    }
+
+    function applySnapshot(snap) {
+      if (!snap) return;
+      if (snap.role != null) els.role.value = snap.role;
+      if (snap.model) els.model.value = snap.model;
+      if (snap.strategy) els.strategy.value = snap.strategy;
+      if (snap.context_limit != null) els.contextLimit.value = snap.context_limit;
+      if (snap.window_size != null) els.windowSize.value = snap.window_size;
+      if (snap.facts_window != null) els.factsWindow.value = snap.facts_window;
+      showStrategyParams();
+      renderThread(snap.messages || []);
+      renderFacts(snap.facts || {});
+      renderBranches(snap);
+      renderTokens(snap.tokens || {});
+      renderUsage(snap.usage_log || []);
+    }
+
+    async function api(path, opts) {
+      const res = await fetch(path, opts);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      return data;
+    }
+
+    async function loadHistory() {
+      try {
+        const snap = await api("/api/history");
+        applySnapshot(snap);
+        els.error.textContent = "";
+      } catch (e) {
+        els.error.textContent = e.message;
+      }
+    }
+
+    async function switchBranch(id) {
+      try {
+        const snap = await api("/api/branch/switch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
+        applySnapshot(snap);
+      } catch (e) {
+        els.error.textContent = e.message;
+      }
+    }
+
+    els.strategy.addEventListener("change", showStrategyParams);
+
+    document.querySelectorAll("[data-preset]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        els.prompt.value = PRESETS[btn.dataset.preset] || "";
+        els.prompt.focus();
+      });
+    });
+
+    els.form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      els.error.textContent = "";
+      els.send.disabled = true;
+      try {
+        const body = {
+          prompt: els.prompt.value,
+          role: els.role.value,
+          model: els.model.value,
+          strategy: els.strategy.value,
+          context_limit: Number(els.contextLimit.value),
+          window_size: Number(els.windowSize.value),
+          facts_window: Number(els.factsWindow.value),
+        };
+        await api("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        els.prompt.value = "";
+        await loadHistory();
+      } catch (e) {
+        els.error.textContent = e.message;
+      } finally {
+        els.send.disabled = false;
+      }
+    });
+
+    els.reset.addEventListener("click", async () => {
+      if (!confirm("Сбросить всю историю и state стратегий?")) return;
+      try {
+        applySnapshot(await api("/api/reset", { method: "POST" }));
+        els.error.textContent = "";
+      } catch (e) {
+        els.error.textContent = e.message;
+      }
+    });
+
+    document.getElementById("btn-facts-save").addEventListener("click", async () => {
+      try {
+        applySnapshot(await api("/api/facts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ facts: collectFacts() }),
+        }));
+      } catch (e) {
+        els.error.textContent = e.message;
+      }
+    });
+
+    document.getElementById("btn-facts-refresh").addEventListener("click", async () => {
+      try {
+        applySnapshot(await api("/api/facts/refresh", { method: "POST" }));
+      } catch (e) {
+        els.error.textContent = e.message;
+      }
+    });
+
+    document.getElementById("btn-checkpoint").addEventListener("click", async () => {
+      try {
+        applySnapshot(await api("/api/checkpoint", { method: "POST" }));
+      } catch (e) {
+        els.error.textContent = e.message;
+      }
+    });
+
+    document.getElementById("btn-fork").addEventListener("click", async () => {
+      try {
+        applySnapshot(await api("/api/branch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: els.branchName.value }),
+        }));
+        els.branchName.value = "";
+      } catch (e) {
+        els.error.textContent = e.message;
+      }
+    });
+
+    showStrategyParams();
+    loadHistory();
+  </script>
+</body>
+</html>

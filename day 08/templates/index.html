@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 08 — токены</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+  <style>
+    :root {
+      --ink: #1a1a1a; --muted: #5c5c5c; --line: #d6d2cb; --accent: #1f4d3a;
+      --accent-hover: #16392b; --surface: #fffdf9; --user-bg: #e8ebe4; --warn: #8b1e1e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; font-family: "IBM Plex Sans", "Segoe UI", sans-serif; color: var(--ink);
+      background: radial-gradient(ellipse at top left, #ebe6dc 0%, transparent 55%),
+        linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+    main { max-width: 72rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+    h1 { margin: 0 0 0.35rem; font-size: 1.75rem; font-weight: 600; letter-spacing: -0.02em; }
+    .sub { margin: 0 0 1.5rem; color: var(--muted); font-size: 0.95rem; }
+    .layout { display: grid; gap: 1.5rem; }
+    @media (min-width: 960px) { .layout { grid-template-columns: 1.4fr 1fr; align-items: start; } }
+    label { display: block; margin-bottom: 0.35rem; font-size: 0.85rem; color: var(--muted); }
+    .field { margin-bottom: 0.9rem; }
+    textarea, select, input[type="number"] {
+      width: 100%; border: 1px solid var(--line); border-radius: 6px;
+      background: var(--surface); color: var(--ink); font: inherit; padding: 0.7rem 0.8rem;
+    }
+    textarea#role { min-height: 3.2rem; }
+    textarea#prompt { min-height: 5rem; resize: vertical; line-height: 1.45; }
+    .hint { margin: 0.35rem 0 0; font-size: 0.8rem; color: var(--muted); }
+    .actions, .presets { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-bottom: 0.85rem; }
+    button {
+      appearance: none; border: 0; border-radius: 6px; background: var(--accent);
+      color: #f7f7f5; font: inherit; font-weight: 500; padding: 0.65rem 1.1rem; cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button.secondary:hover:not(:disabled) { background: var(--user-bg); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+    #thread { margin: 1rem 0; display: flex; flex-direction: column; gap: 0.75rem; max-height: 28rem; overflow: auto; }
+    .bubble { padding: 0.8rem 0.95rem; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); line-height: 1.5; }
+    .bubble.user { background: var(--user-bg); }
+    .bubble .who { margin: 0 0 0.35rem; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+    .bubble.md p { margin: 0.45rem 0; }
+    .bubble.md ul, .bubble.md ol { margin: 0.35rem 0; padding-left: 1.25rem; }
+    .bubble.md code { font-family: ui-monospace, monospace; font-size: 0.88em; background: #ebe6dc; padding: 0.1rem 0.3rem; border-radius: 4px; }
+    .bubble.md pre { margin: 0.5rem 0; padding: 0.7rem 0.85rem; overflow-x: auto; background: #1f2421; color: #f2f4f1; border-radius: 6px; }
+    .bubble.md pre code { background: transparent; padding: 0; color: inherit; }
+    .panel { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 1rem 1.05rem; }
+    .panel h2 { margin: 0 0 0.75rem; font-size: 1rem; }
+    .panel dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 0.75rem; font-size: 0.88rem; }
+    .panel dt { color: var(--muted); }
+    .panel dd { margin: 0; font-variant-numeric: tabular-nums; }
+    .panel dd.warn { color: var(--warn); font-weight: 600; }
+    table.growth { width: 100%; border-collapse: collapse; margin-top: 0.85rem; font-size: 0.8rem; }
+    table.growth th, table.growth td { border-bottom: 1px solid var(--line); padding: 0.35rem 0.3rem; text-align: right; }
+    table.growth th:first-child, table.growth td:first-child { text-align: left; }
+    #global-error { margin-top: 0.75rem; color: var(--warn); white-space: pre-wrap; font-size: 0.9rem; }
+    .empty-thread { color: var(--muted); font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 08</h1>
+    <p class="sub">Подсчёт токенов: текущий запрос, история, ответ. Лимит = реальное окно выбранной модели.</p>
+    <div class="layout">
+      <section>
+        <form id="chat-form">
+          <div class="field">
+            <label for="role">Роль агента</label>
+            <textarea id="role">Ты — полезный ассистент. Отвечай кратко. Помни факты из диалога.</textarea>
+          </div>
+          <div class="field">
+            <label for="model">Модель</label>
+            <select id="model">
+              <option value="gpt-5.4" selected>gpt-5.4 · 1.05M</option>
+              <option value="gpt-5.4-mini">gpt-5.4-mini · 400K</option>
+              <option value="gpt-5.4-nano">gpt-5.4-nano · 400K</option>
+              <option value="gpt-5.5">gpt-5.5 · 1.05M</option>
+              <option value="gpt-4o">gpt-4o · 128K</option>
+            </select>
+          </div>
+          <div class="presets">
+            <button type="button" class="secondary" id="preset-short">Короткий</button>
+            <button type="button" class="secondary" id="preset-long">Длинный</button>
+            <button type="button" class="secondary" id="preset-xlarge">Очень длинный</button>
+          </div>
+          <div id="thread"><p class="empty-thread">Загрузка…</p></div>
+          <div class="field">
+            <label for="prompt">Сообщение</label>
+            <textarea id="prompt" required placeholder="Напиши сообщение…"></textarea>
+            <p class="hint" id="draft-estimate">≈ 0 tok сообщение · ≈ 0 tok prompt · 0% окна</p>
+          </div>
+          <div class="actions">
+            <button type="submit" id="submit">Отправить</button>
+            <button type="button" class="secondary" id="reset">Очистить историю</button>
+          </div>
+        </form>
+        <div id="global-error" hidden></div>
+      </section>
+      <aside class="panel">
+        <h2>Токены</h2>
+        <dl>
+          <dt>Запрос (estimate)</dt><dd id="t-request">—</dd>
+          <dt>История (estimate)</dt><dd id="t-history">—</dd>
+          <dt>Prompt → API (estimate)</dt><dd id="t-prompt-est">—</dd>
+          <dt>Ответ (estimate)</dt><dd id="t-reply-est">—</dd>
+          <dt>API prompt_tokens</dt><dd id="t-prompt">—</dd>
+          <dt>API completion_tokens</dt><dd id="t-completion">—</dd>
+          <dt>API total_tokens</dt><dd id="t-total">—</dd>
+          <dt>Стоимость (~)</dt><dd id="t-cost">—</dd>
+          <dt>Окно модели</dt><dd id="t-model-window">—</dd>
+          <dt>Остаток (estimate)</dt><dd id="t-remaining">—</dd>
+          <dt>% окна (prompt)</dt><dd id="t-pct">—</dd>
+          <dt>Over window</dt><dd id="t-over">—</dd>
+        </dl>
+        <table class="growth">
+          <thead><tr><th>#</th><th>prompt</th><th>completion</th><th>cost</th></tr></thead>
+          <tbody id="growth-body"><tr><td colspan="4" style="text-align:left;color:#5c5c5c">Пока нет ходов</td></tr></tbody>
+        </table>
+      </aside>
+    </div>
+  </main>
+  <script>
+    marked.setOptions({ breaks: true, gfm: true });
+    const FILLER = "\u042d\u0442\u043e \u0443\u0447\u0435\u0431\u043d\u044b\u0439 \u0430\u0431\u0437\u0430\u0446 \u0434\u043b\u044f \u0440\u0430\u0437\u0433\u043e\u043d\u0430 \u0442\u043e\u043a\u0435\u043d\u043e\u0432 \u0432 \u0434\u0438\u0430\u043b\u043e\u0433\u0435. \u041c\u044b \u0441\u0440\u0430\u0432\u043d\u0438\u0432\u0430\u0435\u043c \u043a\u043e\u0440\u043e\u0442\u043a\u0438\u0439, \u0434\u043b\u0438\u043d\u043d\u044b\u0439 \u0438 \u043f\u0435\u0440\u0435\u043f\u043e\u043b\u043d\u0435\u043d\u043d\u044b\u0439 \u043a\u043e\u043d\u0442\u0435\u043a\u0441\u0442 \u0430\u0433\u0435\u043d\u0442\u0430. ";
+    const threadEl = document.getElementById("thread");
+    const form = document.getElementById("chat-form");
+    const submitBtn = document.getElementById("submit");
+    const resetBtn = document.getElementById("reset");
+    const errorEl = document.getElementById("global-error");
+    const roleEl = document.getElementById("role");
+    const modelEl = document.getElementById("model");
+    const promptEl = document.getElementById("prompt");
+    const MODEL_WINDOWS = {
+      "gpt-5.4": 1050000,
+      "gpt-5.4-mini": 400000,
+      "gpt-5.4-nano": 400000,
+      "gpt-5.5": 1050000,
+      "gpt-4o": 128000,
+    };
+    function showError(text) { errorEl.hidden = !text; errorEl.textContent = text || ""; }
+    function repeatFiller(times) { return Array.from({ length: times }, () => FILLER).join(" "); }
+
+    function renderThread(messages) {
+      threadEl.innerHTML = "";
+      if (!messages || !messages.length) {
+        threadEl.innerHTML = '<p class="empty-thread">История пуста.</p>';
+        return;
+      }
+      messages.forEach((msg) => {
+        const bubble = document.createElement("div");
+        bubble.className = "bubble " + (msg.role === "user" ? "user" : "md");
+        const who = document.createElement("p");
+        who.className = "who";
+        who.textContent = msg.role === "user" ? "Вы" : "Агент";
+        bubble.appendChild(who);
+        if (msg.role === "assistant") {
+          const body = document.createElement("div");
+          body.innerHTML = marked.parse(msg.content || "");
+          bubble.appendChild(body);
+        } else {
+          const body = document.createElement("div");
+          body.style.whiteSpace = "pre-wrap";
+          const text = msg.content || "";
+          body.textContent = text.length > 600 ? text.slice(0, 600) + "…" : text;
+          bubble.appendChild(body);
+        }
+        threadEl.appendChild(bubble);
+      });
+    }
+
+    function renderTokens(tokens) {
+      const t = tokens || {};
+      document.getElementById("t-request").textContent = t.request_estimate ?? "—";
+      document.getElementById("t-history").textContent = t.history_estimate ?? "—";
+      document.getElementById("t-prompt-est").textContent = t.prompt_estimate ?? "—";
+      document.getElementById("t-reply-est").textContent = t.reply_estimate ?? "—";
+      document.getElementById("t-prompt").textContent = t.prompt_tokens ?? "—";
+      document.getElementById("t-completion").textContent = t.completion_tokens ?? "—";
+      document.getElementById("t-total").textContent = t.total_tokens ?? "—";
+      document.getElementById("t-cost").textContent = t.cost_usd != null ? "$" + Number(t.cost_usd).toFixed(8) : "—";
+      const win = t.model_context_window;
+      document.getElementById("t-model-window").textContent =
+        win != null ? Number(win).toLocaleString("en-US") : "—";
+      const rem = t.remaining_estimate;
+      document.getElementById("t-remaining").textContent =
+        rem != null ? Number(rem).toLocaleString("en-US") : "—";
+      const pct = t.context_used_pct;
+      document.getElementById("t-pct").textContent =
+        pct != null ? Number(pct).toFixed(2) + "%" : "—";
+      const over = document.getElementById("t-over");
+      over.textContent = t.over_limit ? "YES" : "no";
+      over.className = t.over_limit ? "warn" : "";
+    }
+
+    function renderGrowth(log) {
+      const body = document.getElementById("growth-body");
+      body.innerHTML = "";
+      if (!log || !log.length) {
+        body.innerHTML = '<tr><td colspan="4" style="text-align:left;color:#5c5c5c">Пока нет ходов</td></tr>';
+        return;
+      }
+      log.forEach((row) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = "<td>" + (row.turn ?? "—") + "</td>"
+          + "<td>" + (row.prompt_tokens ?? row.prompt_estimate ?? "—") + "</td>"
+          + "<td>" + (row.completion_tokens ?? row.reply_estimate ?? "—") + "</td>"
+          + "<td>" + (row.cost_usd != null ? Number(row.cost_usd).toFixed(6) : "—") + "</td>";
+        body.appendChild(tr);
+      });
+    }
+
+    async function loadHistory() {
+      showError("");
+      try {
+        const res = await fetch("/api/history");
+        const data = await res.json();
+        if (!res.ok) { showError(data.error || "Failed to load history"); return; }
+        if (data.role) roleEl.value = data.role;
+        if (data.model) modelEl.value = data.model;
+        renderThread(data.messages || []);
+        renderTokens(data.tokens || {});
+        renderGrowth(data.usage_log || []);
+      } catch (err) { showError(String(err)); }
+    }
+
+    document.getElementById("preset-short").addEventListener("click", () => {
+      promptEl.value = "Привет! Меня зовут Дмитрий. Запомни это и ответь одним предложением.";
+      scheduleDraftEstimate();
+    });
+    document.getElementById("preset-long").addEventListener("click", () => {
+      promptEl.value = "Кратко резюмируй текст ниже в 3 пунктах.\n\n" + repeatFiller(25);
+      scheduleDraftEstimate();
+    });
+    document.getElementById("preset-xlarge").addEventListener("click", () => {
+      promptEl.value = "Кратко резюмируй текст ниже в 5 пунктах.\n\n" + repeatFiller(200);
+      scheduleDraftEstimate();
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      showError("");
+      submitBtn.disabled = true;
+      resetBtn.disabled = true;
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: promptEl.value.trim(),
+            model: modelEl.value,
+            role: roleEl.value.trim(),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showError(data.error || "Request failed");
+          if (data.tokens) renderTokens(data.tokens);
+          return;
+        }
+        promptEl.value = "";
+        renderThread(data.messages || []);
+        renderTokens(data.tokens || {});
+        renderGrowth(data.usage_log || []);
+        scheduleDraftEstimate();
+      } catch (err) {
+        showError(String(err));
+      } finally {
+        submitBtn.disabled = false;
+        resetBtn.disabled = false;
+      }
+    });
+
+    resetBtn.addEventListener("click", async () => {
+      if (!confirm("Очистить историю и usage_log?")) return;
+      showError("");
+      const res = await fetch("/api/reset", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { showError(data.error || "Reset failed"); return; }
+      renderThread(data.messages || []);
+      renderTokens(data.tokens || {});
+      renderGrowth(data.usage_log || []);
+      scheduleDraftEstimate();
+    });
+
+
+    const draftEstimateEl = document.getElementById("draft-estimate");
+    let estimateTimer = null;
+    let estimateSeq = 0;
+
+    function formatTok(n) {
+      return Number(n || 0).toLocaleString("en-US");
+    }
+
+    function renderDraftEstimate(data) {
+      if (!data) {
+        draftEstimateEl.textContent = "≈ — tok сообщение · ≈ — tok prompt (с историей)";
+        draftEstimateEl.style.color = "";
+        return;
+      }
+      const pct = data.context_used_pct != null
+        ? Number(data.context_used_pct).toFixed(2) + "%"
+        : "—";
+      draftEstimateEl.textContent =
+        "≈ " + formatTok(data.request_estimate) + " tok сообщение · ≈ "
+        + formatTok(data.prompt_estimate) + " tok prompt (с историей)"
+        + " · " + pct + " окна"
+        + " · остаток " + formatTok(data.remaining_estimate);
+      draftEstimateEl.style.color = data.over_limit ? "var(--warn)" : "";
+    }
+
+    async function refreshDraftEstimate() {
+      const seq = ++estimateSeq;
+      try {
+        const res = await fetch("/api/estimate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: promptEl.value,
+            model: modelEl.value,
+            role: roleEl.value,
+          }),
+        });
+        const data = await res.json();
+        if (seq !== estimateSeq) return;
+        if (!res.ok) {
+          draftEstimateEl.textContent = data.error || "estimate failed";
+          return;
+        }
+        renderDraftEstimate(data);
+      } catch (err) {
+        if (seq !== estimateSeq) return;
+        draftEstimateEl.textContent = String(err);
+      }
+    }
+
+    function scheduleDraftEstimate() {
+      clearTimeout(estimateTimer);
+      estimateTimer = setTimeout(refreshDraftEstimate, 250);
+    }
+
+    promptEl.addEventListener("input", scheduleDraftEstimate);
+    roleEl.addEventListener("input", scheduleDraftEstimate);
+    modelEl.addEventListener("change", () => {
+      const win = MODEL_WINDOWS[modelEl.value] || 0;
+      document.getElementById("t-model-window").textContent =
+        Number(win).toLocaleString("en-US");
+      scheduleDraftEstimate();
+    });
+
+    // replace previous model-only change handler below after inject — remove duplicate
+    loadHistory().then(() => refreshDraftEstimate());
+  </script>
+</body>
+</html>

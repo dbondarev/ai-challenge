@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 10 — сравнение стратегий</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+  <style>
+    :root {
+      --ink: #1a1a1a; --muted: #5c5c5c; --line: #d6d2cb; --accent: #1f4d3a;
+      --accent-hover: #16392b; --surface: #fffdf9; --user-bg: #e8ebe4; --warn: #8b1e1e;
+      --s1: #1f4d3a; --s2: #3d4a6b; --s3: #6b4a2e; --s4: #5a3d6b;
+      --spacer: #f3efe8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; font-family: "IBM Plex Sans", "Segoe UI", sans-serif; color: var(--ink);
+      background: radial-gradient(ellipse at top left, #ebe6dc 0%, transparent 55%),
+        linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+    main { max-width: 120rem; margin: 0 auto; padding: 1.1rem 0.9rem 3rem; }
+    h1 { margin: 0 0 0.2rem; font-size: 1.45rem; font-weight: 600; }
+    .sub { margin: 0 0 0.85rem; color: var(--muted); font-size: 0.9rem; }
+    .sub a { color: var(--accent); }
+    .controls { display: grid; gap: 0.55rem; margin-bottom: 0.75rem; }
+    .controls-meta {
+      display: grid; gap: 0.55rem;
+    }
+    @media (min-width: 1000px) {
+      .controls-meta { grid-template-columns: 1fr 1fr 1fr 1fr; align-items: end; }
+    }
+    .role-block { margin-bottom: 0.15rem; }
+    label { display: block; margin-bottom: 0.2rem; font-size: 0.76rem; color: var(--muted); }
+    textarea, select, input[type="number"] {
+      width: 100%; border: 1px solid var(--line); border-radius: 6px;
+      background: var(--surface); color: var(--ink); font: inherit; padding: 0.45rem 0.6rem;
+    }
+    textarea#role { min-height: 9rem; resize: vertical; white-space: pre-wrap; }
+    textarea#prompt { min-height: 3.4rem; resize: vertical; }
+    .actions, .presets { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.45rem 0; }
+    button {
+      appearance: none; border: 0; border-radius: 6px; background: var(--accent);
+      color: #f7f7f5; font: inherit; font-weight: 500; padding: 0.5rem 0.9rem; cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button.run { background: #6b4a2e; }
+    button.run:hover:not(:disabled) { background: #553820; }
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button.secondary:hover:not(:disabled) { background: var(--user-bg); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+
+    .tok-row { display: grid; gap: 0.55rem; margin-bottom: 0.7rem; }
+    .tok-row.cols-3 { grid-template-columns: 1fr; }
+    .tok-row.cols-4 { grid-template-columns: 1fr; }
+    @media (min-width: 1100px) {
+      .tok-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+      .tok-row.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+    }
+    .tok-card {
+      border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+      padding: 0.55rem 0.7rem;
+    }
+    .tok-card h2 { margin: 0 0 0.3rem; font-size: 0.86rem; }
+    .tok-card.sliding h2 { color: var(--s1); }
+    .tok-card.facts h2 { color: var(--s2); }
+    .tok-card.branching h2, .tok-card.branching_a h2 { color: var(--s3); }
+    .tok-card.branching_b h2 { color: var(--s4); }
+    .tok-card dl {
+      margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.12rem 0.45rem; font-size: 0.74rem;
+    }
+    .tok-card dt { color: var(--muted); }
+    .tok-card dd { margin: 0; font-variant-numeric: tabular-nums; }
+    .tok-card dd.warn { color: var(--warn); font-weight: 600; }
+
+    .progress {
+      margin: 0 0 0.7rem; padding: 0.55rem 0.75rem; border: 1px dashed var(--line);
+      border-radius: 8px; background: rgba(255,253,249,0.75); font-size: 0.85rem; color: var(--muted);
+    }
+    .progress strong { color: var(--ink); }
+
+    .timeline-wrap {
+      border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+      overflow: auto; max-height: 62vh; margin-bottom: 0.85rem;
+    }
+    .timeline {
+      display: grid; min-width: 56rem;
+    }
+    .timeline.cols-3 { grid-template-columns: 7rem 1fr 1fr 1fr; }
+    .timeline.cols-4 { grid-template-columns: 7rem 1fr 1fr 1fr 1fr; }
+    .tl-head, .tl-meta, .tl-user, .tl-asst {
+      border-bottom: 1px solid var(--line); border-right: 1px solid var(--line);
+      padding: 0.45rem 0.55rem; font-size: 0.82rem;
+    }
+    .tl-head {
+      position: sticky; top: 0; background: #f7f3ec; z-index: 2; font-weight: 600; font-size: 0.8rem;
+    }
+    .tl-head.sliding { color: var(--s1); }
+    .tl-head.facts { color: var(--s2); }
+    .tl-head.branching, .tl-head.branching_a { color: var(--s3); }
+    .tl-head.branching_b { color: var(--s4); }
+    .tl-meta { background: #faf7f2; color: var(--muted); font-size: 0.75rem; }
+    .tl-user { background: var(--user-bg); white-space: pre-wrap; }
+    .tl-asst { background: #fff; line-height: 1.4; }
+    .tl-asst.md p { margin: 0.3rem 0; }
+    .tl-asst.md code { font-family: ui-monospace, monospace; font-size: 0.84em; background: #ebe6dc; padding: 0.08rem 0.25rem; border-radius: 4px; }
+    .tl-empty {
+      background: repeating-linear-gradient(-45deg, var(--spacer), var(--spacer) 6px, #efeae2 6px, #efeae2 12px);
+      color: transparent; min-height: 2.2rem;
+    }
+    .tl-note {
+      grid-column: 1 / -1; padding: 0.45rem 0.65rem; background: #efe8dc; color: var(--muted);
+      font-size: 0.8rem; border-bottom: 1px solid var(--line);
+    }
+
+    .bottom { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 0.75rem; }
+    #global-error { margin-top: 0.5rem; color: var(--warn); white-space: pre-wrap; font-size: 0.88rem; }
+    details.payload-all { margin-top: 0.55rem; font-size: 0.8rem; color: var(--muted); }
+    details.payload-all pre {
+      margin: 0.4rem 0 0; max-height: 12rem; overflow: auto; background: #1f2421; color: #e8ebe6;
+      padding: 0.55rem 0.65rem; border-radius: 6px; white-space: pre-wrap; font-size: 0.72rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 10 — сравнение</h1>
+    <p class="sub"><a href="/">← На главную</a> · 3 стратегии рядом; после fork — 4 колонки (Sliding / Facts / A / B). Сценарий из <code>example.md</code> → <code>scenario.json</code>.</p>
+
+    <form id="chat-form">
+      <div class="controls">
+        <div class="role-block">
+          <label for="role">Роль</label>
+          <textarea id="role">{{ scenario_role }}</textarea>
+        </div>
+        <div class="controls-meta">
+          <div>
+            <label for="model">Модель</label>
+            <select id="model">
+              <option value="gpt-5.4" selected>gpt-5.4</option>
+              <option value="gpt-5.4-mini">gpt-5.4-mini</option>
+              <option value="gpt-5.4-nano">gpt-5.4-nano</option>
+              <option value="gpt-5.5">gpt-5.5</option>
+              <option value="gpt-4o">gpt-4o</option>
+            </select>
+          </div>
+          <div>
+            <label for="context_limit">context_limit</label>
+            <input id="context_limit" type="number" min="64" value="8192">
+          </div>
+          <div>
+            <label for="window_size">window_size</label>
+            <input id="window_size" type="number" min="1" value="5">
+          </div>
+          <div>
+            <label for="facts_window">facts_window</label>
+            <input id="facts_window" type="number" min="1" value="6">
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="run" id="btn-run">▶ Запустить тестирование</button>
+        <button type="button" class="secondary" id="btn-stop" disabled>Стоп</button>
+        <button type="button" class="secondary" id="reset">Очистить</button>
+      </div>
+      <div class="progress" id="progress">Сценарий не запущен. Кнопка прогонит Cartman Snacks (window=5), с fork A/B.</div>
+
+      <div class="tok-row cols-3" id="tok-row"></div>
+      <div class="timeline-wrap">
+        <div class="timeline cols-3" id="timeline"></div>
+      </div>
+
+      <div class="bottom">
+        <label for="prompt">Ручная отправка во все активные колонки</label>
+        <textarea id="prompt" placeholder="Опционально — вручную…"></textarea>
+        <div class="actions">
+          <button type="submit" id="submit">Отправить вручную</button>
+        </div>
+        <details class="payload-all">
+          <summary>Последние API payloads (JSON) — развернуть</summary>
+          <pre id="payload-dump">(пусто)</pre>
+        </details>
+        <div id="global-error" hidden></div>
+      </div>
+    </form>
+  </main>
+  <script>
+    marked.setOptions({ breaks: true, gfm: true });
+    const COL_LABELS = {
+      sliding: "Sliding",
+      facts: "Facts",
+      branching: "Branching",
+      branching_a: "Branch A",
+      branching_b: "Branch B",
+    };
+    const els = {
+      form: document.getElementById("chat-form"),
+      role: document.getElementById("role"),
+      model: document.getElementById("model"),
+      limit: document.getElementById("context_limit"),
+      window: document.getElementById("window_size"),
+      factsWindow: document.getElementById("facts_window"),
+      prompt: document.getElementById("prompt"),
+      submit: document.getElementById("submit"),
+      reset: document.getElementById("reset"),
+      run: document.getElementById("btn-run"),
+      stop: document.getElementById("btn-stop"),
+      error: document.getElementById("global-error"),
+      progress: document.getElementById("progress"),
+      tokRow: document.getElementById("tok-row"),
+      timeline: document.getElementById("timeline"),
+      payload: document.getElementById("payload-dump"),
+    };
+    let columns = ["sliding", "facts", "branching"];
+    let stopRequested = false;
+    let running = false;
+
+    function showError(t) { els.error.hidden = !t; els.error.textContent = t || ""; }
+    function fmt(n) { return n == null ? "—" : Number(n).toLocaleString("en-US"); }
+    function md(text) {
+      try { return marked.parse(text || ""); }
+      catch { return (text || "").replace(/</g, "&lt;"); }
+    }
+
+    function setColumns(cols) {
+      columns = cols && cols.length ? cols : ["sliding", "facts", "branching"];
+      const cls = columns.length >= 4 ? "cols-4" : "cols-3";
+      els.tokRow.className = "tok-row " + cls;
+      els.timeline.className = "timeline " + cls;
+    }
+
+    function renderTokens(sides) {
+      els.tokRow.innerHTML = columns.map((col) => {
+        const t = (sides[col] && sides[col].tokens) || {};
+        return `<div class="tok-card ${col}">
+          <h2>${COL_LABELS[col] || col}</h2>
+          <dl>
+            <dt>prompt</dt><dd>${fmt(t.prompt_estimate)}</dd>
+            <dt>if full</dt><dd>${fmt(t.prompt_estimate_if_full)}</dd>
+            <dt>saved</dt><dd>${fmt(t.tokens_saved_vs_full)}</dd>
+            <dt>API</dt><dd>${fmt(t.prompt_tokens)} / ${fmt(t.completion_tokens)}</dd>
+            <dt>cost</dt><dd>${t.cost_usd != null ? "$" + Number(t.cost_usd).toFixed(5) : "—"}</dd>
+            <dt>over</dt><dd class="${t.over_limit ? "warn" : ""}">${t.over_limit ? "YES" : "no"}</dd>
+          </dl>
+        </div>`;
+      }).join("");
+    }
+
+    function renderTimeline(timeline) {
+      const heads = [`<div class="tl-head">Шаг</div>`]
+        .concat(columns.map((c) => `<div class="tl-head ${c}">${COL_LABELS[c] || c}</div>`))
+        .join("");
+      const rows = [];
+      (timeline || []).forEach((row) => {
+        if (row.kind === "checkpoint" || row.kind === "fork") {
+          rows.push(`<div class="tl-note">${row.kind.toUpperCase()}: ${row.note || row.label || ""}</div>`);
+          return;
+        }
+        const label = row.label || row.id || "";
+        const cells = Object.assign({}, row.cells || {});
+        // pre-fork "branching" cell → show in A and B after fork
+        if (cells.branching) {
+          if (!cells.branching_a) cells.branching_a = cells.branching;
+          if (!cells.branching_b) cells.branching_b = cells.branching;
+        }
+        rows.push(`<div class="tl-meta">${label}</div>`);
+        columns.forEach((col) => {
+          const cell = cells[col];
+          if (!cell) rows.push(`<div class="tl-user tl-empty">.</div>`);
+          else rows.push(`<div class="tl-user">${(cell.user || "").replace(/</g, "&lt;")}</div>`);
+        });
+        rows.push(`<div class="tl-meta">↳ ответ</div>`);
+        columns.forEach((col) => {
+          const cell = cells[col];
+          if (!cell) rows.push(`<div class="tl-asst tl-empty">.</div>`);
+          else rows.push(`<div class="tl-asst md">${md(cell.assistant || "")}</div>`);
+        });
+      });
+      els.timeline.innerHTML = heads + rows.join("");
+      els.timeline.parentElement.scrollTop = els.timeline.parentElement.scrollHeight;
+    }
+
+    function renderPayloads(sides) {
+      const dump = {};
+      columns.forEach((c) => {
+        dump[c] = (sides[c] && sides[c].last_payload) || [];
+      });
+      els.payload.textContent = JSON.stringify(dump, null, 2);
+    }
+
+    function applyState(state) {
+      if (!state) return;
+      if (state.role) els.role.value = state.role;
+      if (state.model) els.model.value = state.model;
+      if (state.context_limit) els.limit.value = state.context_limit;
+      if (state.window_size) els.window.value = state.window_size;
+      if (state.facts_window) els.factsWindow.value = state.facts_window;
+      setColumns(state.columns || (state.forked
+        ? ["sliding", "facts", "branching_a", "branching_b"]
+        : ["sliding", "facts", "branching"]));
+      renderTokens(state.sides || {});
+      renderTimeline(state.timeline || []);
+      renderPayloads(state.sides || {});
+    }
+
+    async function loadHistory() {
+      showError("");
+      try {
+        const [histRes, scenRes] = await Promise.all([
+          fetch("/api/compare/history"),
+          fetch("/api/compare/scenario"),
+        ]);
+        const data = await histRes.json();
+        const scen = await scenRes.json();
+        if (!histRes.ok) { showError(data.error || "Failed"); return; }
+        applyState(data);
+        if (!els.role.value.trim() && scen.scenario && scen.scenario.role) {
+          els.role.value = scen.scenario.role;
+        } else if (scen.scenario && scen.scenario.role && !data.role) {
+          els.role.value = scen.scenario.role;
+        }
+      } catch (e) { showError(String(e)); }
+    }
+
+    function setRunning(on) {
+      running = on;
+      els.run.disabled = on;
+      els.stop.disabled = !on;
+      els.submit.disabled = on;
+      els.reset.disabled = on;
+    }
+
+    els.stop.addEventListener("click", () => { stopRequested = true; });
+
+    els.run.addEventListener("click", async () => {
+      if (running) return;
+      if (!confirm("Сбросить сравнение и прогнать сценарий Cartman Snacks?")) return;
+      stopRequested = false;
+      setRunning(true);
+      showError("");
+      try {
+        const startRes = await fetch("/api/compare/scenario/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: els.model.value,
+            context_limit: Number(els.limit.value),
+          }),
+        });
+        const startData = await startRes.json();
+        if (!startRes.ok) throw new Error(startData.error || "start failed");
+        applyState(startData.state);
+        if (startData.scenario && startData.scenario.role) {
+          els.role.value = startData.scenario.role;
+        }
+        const total = startData.total_steps || 0;
+        els.progress.innerHTML = `Старт · 0 / ${total}`;
+
+        for (let i = 0; i < total; i++) {
+          if (stopRequested) {
+            els.progress.innerHTML = `<strong>Остановлено</strong> на шаге ${i} / ${total}`;
+            break;
+          }
+          const stepRes = await fetch("/api/compare/scenario/step", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ index: i }),
+          });
+          const stepData = await stepRes.json();
+          if (!stepRes.ok) throw new Error(stepData.error || "step failed");
+          applyState(stepData.state);
+          const step = stepData.step || {};
+          const title = step.label || step.id || step.action || ("#" + (i + 1));
+          els.progress.innerHTML = `Шаг <strong>${i + 1} / ${total}</strong>: ${title}`;
+          if (stepData.done) {
+            els.progress.innerHTML = `<strong>Готово</strong> · ${total} шагов`;
+            break;
+          }
+        }
+      } catch (e) {
+        showError(String(e));
+        els.progress.innerHTML = `<strong>Ошибка</strong>: ${String(e)}`;
+      } finally {
+        setRunning(false);
+        stopRequested = false;
+      }
+    });
+
+    els.form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      if (running) return;
+      const prompt = els.prompt.value.trim();
+      if (!prompt) return;
+      showError("");
+      els.submit.disabled = true;
+      try {
+        const res = await fetch("/api/compare/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt,
+            model: els.model.value,
+            role: els.role.value.trim(),
+            context_limit: Number(els.limit.value),
+            window_size: Number(els.window.value),
+            facts_window: Number(els.factsWindow.value),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) { showError(data.error || "Request failed"); return; }
+        els.prompt.value = "";
+        applyState(data);
+      } catch (e) { showError(String(e)); }
+      finally { els.submit.disabled = false; }
+    });
+
+    els.reset.addEventListener("click", async () => {
+      if (running) return;
+      if (!confirm("Очистить сравнение и timeline?")) return;
+      const res = await fetch("/api/compare/reset", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { showError(data.error || "Reset failed"); return; }
+      applyState(data);
+      els.progress.textContent = "Сценарий не запущен.";
+      showError("");
+    });
+
+    loadHistory();
+  </script>
+</body>
+</html>

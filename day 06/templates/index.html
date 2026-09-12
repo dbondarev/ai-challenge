@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 06 — первый агент</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+  <style>
+    :root {
+      --ink: #1a1a1a;
+      --muted: #5c5c5c;
+      --line: #d6d2cb;
+      --accent: #1f4d3a;
+      --accent-hover: #16392b;
+      --surface: #fffdf9;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse at top left, #ebe6dc 0%, transparent 55%),
+        linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+
+    main {
+      max-width: 40rem;
+      margin: 0 auto;
+      padding: 3rem 1.25rem 4rem;
+    }
+
+    h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.75rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .sub {
+      margin: 0 0 2rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .field { margin-bottom: 1.25rem; }
+
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--ink);
+      font: inherit;
+      padding: 0.75rem 0.85rem;
+    }
+
+    textarea#role { min-height: 4.5rem; }
+
+    textarea {
+      min-height: 8rem;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    select { cursor: pointer; }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #f7f7f5;
+      font: inherit;
+      font-weight: 500;
+      padding: 0.7rem 1.25rem;
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+
+    .hint {
+      margin: 0.45rem 0 0;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    #meta {
+      margin-top: 1.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+
+    #reply {
+      margin-top: 0.75rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--line);
+      line-height: 1.55;
+      min-height: 1.5rem;
+    }
+
+    #reply.error { color: #8b1e1e; white-space: pre-wrap; }
+    #reply.empty { color: var(--muted); white-space: pre-wrap; }
+
+    #reply.md > *:first-child { margin-top: 0; }
+    #reply.md > *:last-child { margin-bottom: 0; }
+    #reply.md p { margin: 0.65rem 0; }
+    #reply.md h1, #reply.md h2, #reply.md h3, #reply.md h4 {
+      margin: 1.1rem 0 0.45rem;
+      line-height: 1.25;
+      font-weight: 600;
+    }
+    #reply.md h1 { font-size: 1.35rem; }
+    #reply.md h2 { font-size: 1.2rem; }
+    #reply.md h3 { font-size: 1.05rem; }
+    #reply.md ul, #reply.md ol { margin: 0.5rem 0; padding-left: 1.35rem; }
+    #reply.md li { margin: 0.2rem 0; }
+    #reply.md code {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.9em;
+      background: #ebe6dc;
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+    }
+    #reply.md pre {
+      margin: 0.75rem 0;
+      padding: 0.85rem 1rem;
+      overflow-x: auto;
+      background: #1f2421;
+      color: #f2f4f1;
+      border-radius: 6px;
+    }
+    #reply.md pre code {
+      background: transparent;
+      padding: 0;
+      color: inherit;
+      font-size: 0.85rem;
+    }
+    #reply.md blockquote {
+      margin: 0.75rem 0;
+      padding-left: 0.85rem;
+      border-left: 3px solid var(--line);
+      color: var(--muted);
+    }
+    #reply.md a { color: var(--accent); }
+    #reply.md table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 0.75rem 0;
+      font-size: 0.9rem;
+    }
+    #reply.md th, #reply.md td {
+      border: 1px solid var(--line);
+      padding: 0.4rem 0.55rem;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 06</h1>
+    <p class="sub">Первый агент: запрос обрабатывает класс <code>Agent</code>, а не сырой вызов OpenAI из view.</p>
+
+    <form id="chat-form">
+      <div class="field">
+        <label for="role">Роль агента</label>
+        <textarea id="role" name="role" placeholder="Например: Ты — строгий ревьюер кода. Отвечай кратко и по делу.">Ты — полезный ассистент. Отвечай ясно и по существу.</textarea>
+        <p class="hint">Уходит в system message внутри Agent.</p>
+      </div>
+
+      <div class="field">
+        <label for="prompt">Запрос</label>
+        <textarea id="prompt" name="prompt" required placeholder="Спроси что-нибудь…"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="model">Модель</label>
+        <select id="model" name="model">
+          <option value="gpt-5.4" selected>gpt-5.4</option>
+          <option value="gpt-5.4-mini">gpt-5.4-mini</option>
+          <option value="gpt-5.4-nano">gpt-5.4-nano</option>
+          <option value="gpt-5.5">gpt-5.5</option>
+          <option value="gpt-4o">gpt-4o</option>
+        </select>
+        <p class="hint">Flask → Agent.reply() → OpenAI API. Ответ рендерится как Markdown.</p>
+      </div>
+
+      <button type="submit" id="submit">Отправить</button>
+    </form>
+
+    <div id="meta"></div>
+    <div id="reply" class="empty" aria-live="polite">Ответ агента появится здесь.</div>
+  </main>
+
+  <script>
+    marked.setOptions({ breaks: true, gfm: true });
+
+    const form = document.getElementById("chat-form");
+    const replyEl = document.getElementById("reply");
+    const metaEl = document.getElementById("meta");
+    const submitBtn = document.getElementById("submit");
+
+    function showPlain(text, className) {
+      replyEl.className = className || "";
+      replyEl.textContent = text;
+    }
+
+    function showMarkdown(text) {
+      replyEl.className = "md";
+      replyEl.innerHTML = marked.parse(text || "(пустой ответ)");
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      showPlain("Агент думает…", "empty");
+      metaEl.textContent = "";
+      submitBtn.disabled = true;
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: document.getElementById("prompt").value.trim(),
+            model: document.getElementById("model").value,
+            role: document.getElementById("role").value.trim(),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showPlain(data.error || "Request failed", "error");
+          return;
+        }
+        showMarkdown(data.reply || "(пустой ответ)");
+        const u = data.usage || {};
+        metaEl.textContent =
+          "model: " + (data.model || "—")
+          + " · finish_reason: " + (data.finish_reason || "—")
+          + "\nrole: " + (data.role || "(не задана)")
+          + "\ntokens: prompt " + (u.prompt_tokens ?? "—")
+          + " · completion " + (u.completion_tokens ?? "—")
+          + " · total " + (u.total_tokens ?? "—");
+      } catch (err) {
+        showPlain(String(err), "error");
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
