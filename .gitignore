@@ -7,3 +7,11 @@ __pycache__/
 
 history.json
 compare_history.json
+short_term.json
+working.json
+long_term.json
+profiles.json
+task_state.json
+invariants.json
+tasks.json
+settings.json

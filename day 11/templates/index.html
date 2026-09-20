@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Day 11 — Memory layers</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --border: #2d3a4d;
+      --text: #e7ecf3;
+      --muted: #8b9bb4;
+      --accent: #3d8bfd;
+      --working: #f0a020;
+      --long: #3ecf8e;
+      --danger: #e85d5d;
+      --user: #243044;
+      --bot: #1e2a3a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { margin: 0; font-size: 1.15rem; font-weight: 600; }
+    .badge {
+      font-size: 0.75rem;
+      color: var(--muted);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 0.25rem 0.6rem;
+      border-radius: 999px;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+      padding: 1rem 1.25rem 2rem;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+    }
+    .panel h2 {
+      margin: 0 0 0.75rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      display: inline-block;
+    }
+    .dot.working { background: var(--working); }
+    .dot.long { background: var(--long); }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.6rem;
+      margin-bottom: 0.75rem;
+    }
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    input, select, textarea, button {
+      font: inherit;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      padding: 0.45rem 0.6rem;
+    }
+    textarea { resize: vertical; min-height: 72px; width: 100%; }
+    .readonly-val {
+      padding: 0.45rem 0.6rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    button {
+      cursor: pointer;
+      background: var(--accent);
+      border-color: transparent;
+      color: #fff;
+      font-weight: 500;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.ghost {
+      background: transparent;
+      border-color: var(--border);
+      color: var(--text);
+    }
+    button.danger {
+      background: transparent;
+      border-color: var(--danger);
+      color: var(--danger);
+      font-size: 0.75rem;
+      padding: 0.2rem 0.45rem;
+    }
+    button.mem-btn {
+      font-size: 0.7rem;
+      padding: 0.2rem 0.45rem;
+      background: transparent;
+    }
+    button.mem-btn.working {
+      border-color: var(--working);
+      color: var(--working);
+    }
+    button.mem-btn.long {
+      border-color: var(--long);
+      color: var(--long);
+    }
+    .row-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    #chat {
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      max-height: 420px;
+      overflow-y: auto;
+      padding: 0.25rem;
+      margin-bottom: 0.75rem;
+      min-height: 120px;
+    }
+    .msg {
+      padding: 0.65rem 0.75rem;
+      border-radius: 10px;
+      max-width: 92%;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+    .msg.user { align-self: flex-end; background: var(--user); }
+    .msg.assistant { align-self: flex-start; background: var(--bot); }
+    .msg .meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+      margin-bottom: 0.35rem;
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .msg .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: 0.5rem;
+    }
+    .composer { display: flex; flex-direction: column; gap: 0.5rem; }
+    .stats {
+      font-size: 0.75rem;
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    .memories {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 720px) {
+      .memories { grid-template-columns: 1fr; }
+    }
+    .fact {
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding: 0.55rem 0.65rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 0.45rem;
+      font-size: 0.85rem;
+    }
+    .fact .body { flex: 1; min-width: 0; }
+    .fact .key {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-bottom: 0.2rem;
+      word-break: break-all;
+    }
+    .fact .val { white-space: pre-wrap; word-break: break-word; }
+    .empty {
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-style: italic;
+      padding: 0.5rem 0;
+    }
+    .task-title {
+      font-weight: 500;
+      color: var(--working);
+      font-size: 0.85rem;
+    }
+    .toast {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 0.65rem 0.9rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      max-width: 320px;
+      display: none;
+      z-index: 20;
+    }
+    .toast.show { display: block; }
+    .toast.err { border-color: var(--danger); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Day 11 — слои памяти</h1>
+    <span class="badge">диалог = сессия · задача · долговременная</span>
+  </header>
+
+  <div class="layout">
+    <section class="panel">
+      <h2>Настройки</h2>
+      <div class="controls">
+        <label>Модель
+          <select id="model">
+            <option value="gpt-5.4">gpt-5.4 · 1.05M</option>
+            <option value="gpt-5.4-mini">gpt-5.4-mini · 400K</option>
+            <option value="gpt-5.4-nano">gpt-5.4-nano · 400K</option>
+            <option value="gpt-5.5">gpt-5.5 · 1.05M</option>
+            <option value="gpt-4o">gpt-4o · 128K</option>
+          </select>
+        </label>
+        <label>Лимит контекста модели
+          <div id="contextLimit" class="readonly-val">—</div>
+        </label>
+        <label>Окно диалога (сообщений)
+          <input id="windowSize" type="number" min="2" step="2" />
+        </label>
+      </div>
+      <label>Роль (system)
+        <textarea id="role" rows="2" placeholder="Кто агент..."></textarea>
+      </label>
+    </section>
+
+    <section class="panel">
+      <h2>Диалог <span class="badge" style="font-weight:400">исчезает при обновлении страницы</span></h2>
+      <div id="chat"></div>
+      <div class="composer">
+        <textarea id="prompt" rows="3" placeholder="Сообщение..."></textarea>
+        <div class="row-actions">
+          <button id="sendBtn" type="button">Отправить</button>
+          <button id="newTaskBtn" class="ghost" type="button">Новая задача</button>
+          <button id="clearDialogBtn" class="ghost" type="button">Очистить диалог</button>
+        </div>
+        <div class="stats" id="stats"></div>
+      </div>
+    </section>
+
+    <div class="memories">
+      <section class="panel">
+        <h2>
+          <span class="dot working"></span>
+          Память задачи
+          <span class="task-title" id="taskTitle"></span>
+        </h2>
+        <p class="empty" style="margin-top:0">Живёт до «Новая задача». Ключи выбирает агент.</p>
+        <div id="workingFacts"></div>
+      </section>
+      <section class="panel">
+        <h2><span class="dot long"></span> Долговременная память</h2>
+        <p class="empty" style="margin-top:0">Между сессиями. У каждого факта — удалить.</p>
+        <div id="longFacts"></div>
+      </section>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let state = null;
+    let busy = false;
+
+    function toast(msg, isErr) {
+      const el = $("toast");
+      el.textContent = msg;
+      el.className = "toast show" + (isErr ? " err" : "");
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => el.classList.remove("show"), 3200);
+    }
+
+    async function api(path, opts) {
+      const res = await fetch(path, {
+        headers: { "Content-Type": "application/json", ...(opts && opts.headers) },
+        ...opts,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      return data;
+    }
+
+    function renderChat() {
+      const box = $("chat");
+      box.innerHTML = "";
+      const msgs = (state && state.short_term) || [];
+      if (!msgs.length) {
+        box.innerHTML = '<div class="empty">Пока пусто. Напишите первое сообщение.</div>';
+        return;
+      }
+      msgs.forEach((m, i) => {
+        const div = document.createElement("div");
+        div.className = "msg " + m.role;
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.innerHTML = "<span>" + m.role + "</span>";
+        div.appendChild(meta);
+        const body = document.createElement("div");
+        body.textContent = m.content || "";
+        div.appendChild(body);
+        if (m.role === "user") {
+          const actions = document.createElement("div");
+          actions.className = "actions";
+          const b1 = document.createElement("button");
+          b1.type = "button";
+          b1.className = "mem-btn working";
+          b1.textContent = "→ память задачи";
+          b1.onclick = () => remember("working", m.content, i);
+          const b2 = document.createElement("button");
+          b2.type = "button";
+          b2.className = "mem-btn long";
+          b2.textContent = "→ долговременная";
+          b2.onclick = () => remember("long_term", m.content, i);
+          actions.appendChild(b1);
+          actions.appendChild(b2);
+          div.appendChild(actions);
+        }
+        box.appendChild(div);
+      });
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function renderFacts(containerId, items, layer) {
+      const box = $(containerId);
+      box.innerHTML = "";
+      const list = items || [];
+      if (!list.length) {
+        box.innerHTML = '<div class="empty">Нет фактов</div>';
+        return;
+      }
+      list.forEach((item) => {
+        const row = document.createElement("div");
+        row.className = "fact";
+        const body = document.createElement("div");
+        body.className = "body";
+        body.innerHTML =
+          '<div class="key">' + escapeHtml(item.key) + '</div>' +
+          '<div class="val">' + escapeHtml(String(item.value)) + '</div>';
+        row.appendChild(body);
+        if (layer === "long_term") {
+          const del = document.createElement("button");
+          del.type = "button";
+          del.className = "danger";
+          del.textContent = "удалить";
+          del.onclick = () => deleteFact(layer, item.key);
+          row.appendChild(del);
+        }
+        box.appendChild(row);
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function formatWindow(n) {
+      n = Number(n) || 0;
+      if (n >= 1_000_000) return (n / 1_000_000).toFixed(2).replace(/\.00$/, "") + "M токенов";
+      if (n >= 1000) return Math.round(n / 1000) + "K токенов";
+      return n + " токенов";
+    }
+
+    function applyState(s) {
+      state = s;
+      if (!s) return;
+      if ($("model").options.length && s.model) $("model").value = s.model;
+      $("contextLimit").textContent = formatWindow(s.context_limit);
+      $("windowSize").value = s.window_size;
+      $("role").value = s.role || "";
+      $("taskTitle").textContent = s.task_title ? "· " + s.task_title : "";
+      $("stats").textContent =
+        "токены ≈ " + (s.last_tokens || 0) +
+        " · лимит " + formatWindow(s.context_limit) +
+        " · окно " + ((s.short_term || []).length) + "/" + s.window_size +
+        " · задача: " + ((s.working || []).length) +
+        " · долгая: " + ((s.long_term || []).length);
+      renderChat();
+      renderFacts("workingFacts", s.working, "working");
+      renderFacts("longFacts", s.long_term, "long_term");
+    }
+
+    async function saveSettings(partial) {
+      const body = {
+        model: $("model").value,
+        role: $("role").value,
+        window_size: Number($("windowSize").value),
+        ...partial,
+      };
+      const data = await api("/api/settings", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      applyState(data.state);
+      return data;
+    }
+
+    async function boot() {
+      const s = await api("/api/history?boot=1");
+      applyState(s);
+    }
+
+    async function remember(layer, text, index) {
+      if (busy) return;
+      busy = true;
+      try {
+        const data = await api("/api/memory/remember", {
+          method: "POST",
+          body: JSON.stringify({ layer, text, index }),
+        });
+        applyState(data.state || data);
+        const n = (data.added || []).length;
+        toast(n ? "Сохранено фактов: " + n : "Фактов не извлечено");
+      } catch (e) {
+        toast(e.message, true);
+      } finally {
+        busy = false;
+      }
+    }
+
+    async function deleteFact(layer, key) {
+      try {
+        const data = await api("/api/memory/delete", {
+          method: "POST",
+          body: JSON.stringify({ layer, key }),
+        });
+        applyState(data.state);
+      } catch (e) {
+        toast(e.message, true);
+      }
+    }
+
+    async function send() {
+      if (busy) return;
+      const prompt = $("prompt").value.trim();
+      if (!prompt) return;
+      busy = true;
+      $("sendBtn").disabled = true;
+      try {
+        const data = await api("/api/chat", {
+          method: "POST",
+          body: JSON.stringify({
+            prompt,
+            model: $("model").value,
+            role: $("role").value,
+            window_size: Number($("windowSize").value),
+          }),
+        });
+        $("prompt").value = "";
+        applyState(data);
+      } catch (e) {
+        toast(e.message, true);
+      } finally {
+        busy = false;
+        $("sendBtn").disabled = false;
+      }
+    }
+
+    $("sendBtn").onclick = send;
+    $("prompt").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    });
+
+    $("newTaskBtn").onclick = async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        const data = await api("/api/memory/clear", {
+          method: "POST",
+          body: JSON.stringify({ layer: "working" }),
+        });
+        applyState(data.state);
+        toast("Память задачи очищена. Диалог тоже сброшен.");
+      } catch (e) {
+        toast(e.message, true);
+      } finally {
+        busy = false;
+      }
+    };
+
+    $("clearDialogBtn").onclick = async () => {
+      try {
+        const data = await api("/api/memory/clear", {
+          method: "POST",
+          body: JSON.stringify({ layer: "short" }),
+        });
+        applyState(data.state);
+      } catch (e) {
+        toast(e.message, true);
+      }
+    };
+
+    $("model").addEventListener("change", () => {
+      saveSettings({ model: $("model").value }).catch((e) => toast(e.message, true));
+    });
+    $("windowSize").addEventListener("change", () => {
+      saveSettings({ window_size: Number($("windowSize").value) }).catch((e) => toast(e.message, true));
+    });
+    $("role").addEventListener("change", () => {
+      saveSettings({ role: $("role").value }).catch((e) => toast(e.message, true));
+    });
+
+    boot().catch((e) => toast(e.message, true));
+  </script>
+</body>
+</html>

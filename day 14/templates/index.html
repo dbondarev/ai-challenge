@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 14 — инварианты</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+  <style>
+    :root {
+      --ink: #1a1a1a; --muted: #5c5c5c; --line: #d6d2cb; --accent: #1f4d3a;
+      --accent-hover: #16392b; --surface: #fffdf9; --user-bg: #e8ebe4; --warn: #8b1e1e;
+      --inv: #5a3d6b; --ok: #1f4d3a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; font-family: "IBM Plex Sans", "Segoe UI", sans-serif; color: var(--ink);
+      background: radial-gradient(ellipse at top left, #ebe6dc 0%, transparent 55%),
+        linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+    main { max-width: 92rem; margin: 0 auto; padding: 1.35rem 1rem 3rem; }
+    h1 { margin: 0 0 0.2rem; font-size: 1.5rem; font-weight: 600; }
+    .sub { margin: 0 0 0.7rem; color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
+    .scenario {
+      margin: 0 0 0.9rem; padding: 0.6rem 0.75rem; border: 1px dashed var(--line);
+      border-radius: 8px; background: rgba(255,253,249,0.75); font-size: 0.82rem; color: var(--muted); line-height: 1.45;
+    }
+    .layout { display: grid; gap: 1rem; }
+    @media (min-width: 1100px) { .layout { grid-template-columns: 1.1fr 1fr; align-items: start; } }
+    label { display: block; margin-bottom: 0.2rem; font-size: 0.74rem; color: var(--muted); }
+    .field { margin-bottom: 0.5rem; }
+    .row { display: grid; gap: 0.45rem; }
+    @media (min-width: 640px) {
+      .row.two { grid-template-columns: 1fr 1fr; }
+      .row.three { grid-template-columns: 1fr 1fr 1fr; }
+    }
+    textarea, select, input[type="number"], input[type="text"] {
+      width: 100%; border: 1px solid var(--line); border-radius: 6px;
+      background: var(--surface); color: var(--ink); font: inherit; padding: 0.45rem 0.55rem;
+    }
+    textarea#role { min-height: 2.6rem; }
+    textarea#prompt { min-height: 3.6rem; resize: vertical; }
+    textarea#inv-statement { min-height: 2.8rem; resize: vertical; font-size: 0.85rem; }
+    .hint { margin: 0.15rem 0 0; font-size: 0.72rem; color: var(--muted); }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.35rem 0 0.55rem; }
+    button {
+      appearance: none; border: 0; border-radius: 6px; background: var(--accent);
+      color: #f7f7f5; font: inherit; font-weight: 500; padding: 0.42rem 0.75rem; cursor: pointer; font-size: 0.86rem;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button.conflict { background: var(--warn); }
+    button.ok { background: var(--ok); }
+    button.inv { background: var(--inv); }
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button.secondary:hover:not(:disabled) { background: var(--user-bg); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+    #thread { margin: 0.45rem 0; display: flex; flex-direction: column; gap: 0.45rem; max-height: 26rem; overflow: auto; }
+    .bubble {
+      padding: 0.55rem 0.7rem; border-radius: 8px; border: 1px solid var(--line);
+      background: var(--surface); line-height: 1.45; font-size: 0.86rem;
+    }
+    .bubble.user { background: var(--user-bg); }
+    .bubble .who { margin: 0 0 0.2rem; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; color: var(--muted); }
+    .panel {
+      border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+      padding: 0.75rem; margin-bottom: 0.65rem;
+    }
+    .panel h2 { margin: 0 0 0.35rem; font-size: 0.92rem; }
+    .panel.inv h2 { color: var(--inv); }
+    table.inv { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    table.inv th, table.inv td {
+      border-bottom: 1px solid var(--line); padding: 0.35rem 0.25rem; text-align: left; vertical-align: top;
+    }
+    table.inv tr.off { opacity: 0.45; }
+    .tag {
+      display: inline-block; font-size: 0.66rem; font-weight: 600; text-transform: uppercase;
+      padding: 0.12rem 0.35rem; border-radius: 4px; background: #ebe6dc; color: var(--muted);
+    }
+    #global-error { margin-top: 0.4rem; color: var(--warn); white-space: pre-wrap; font-size: 0.85rem; }
+    .empty { color: var(--muted); font-size: 0.84rem; }
+    details.payload { margin-top: 0.35rem; font-size: 0.76rem; color: var(--muted); }
+    details.payload pre {
+      margin: 0.3rem 0 0; max-height: 12rem; overflow: auto; background: #1f2421; color: #e8ebe6;
+      padding: 0.45rem 0.55rem; border-radius: 6px; white-space: pre-wrap; font-size: 0.68rem;
+    }
+    dl.tok { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.12rem 0.45rem; font-size: 0.78rem; }
+    dl.tok dt { color: var(--muted); } dl.tok dd { margin: 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 14 — инварианты и ограничения</h1>
+    <p class="sub">
+      Инварианты хранятся <strong>отдельно</strong> от диалога (<code>invariants.json</code>) и уходят в каждый запрос.
+      При конфликте ассистент должен <strong>отказать</strong> и назвать нарушенное правило.
+    </p>
+    <div class="scenario">
+      Пресеты ниже бьют в демо-инварианты (стек Vue, session-auth, доля Кайла ≤20%). Сценарий — в <code>example.md</code>.
+    </div>
+
+    <div class="layout">
+      <section>
+        <form id="chat-form">
+          <div class="field">
+            <label for="role">Роль</label>
+            <textarea id="role">Ты ассистент, который работает строго в рамках INVARIANTS. При конфликте с запросом — отказывай и объясняй, какое правило нарушено. Не обходи инварианты.</textarea>
+          </div>
+          <div class="row three">
+            <div class="field">
+              <label for="model">Модель</label>
+              <select id="model">
+                <option value="gpt-5.4" selected>gpt-5.4</option>
+                <option value="gpt-5.4-mini">gpt-5.4-mini</option>
+                <option value="gpt-5.4-nano">gpt-5.4-nano</option>
+                <option value="gpt-5.5">gpt-5.5</option>
+                <option value="gpt-4o">gpt-4o</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="context_limit">context_limit</label>
+              <input id="context_limit" type="number" min="64" value="8192">
+            </div>
+            <div class="field">
+              <label for="window_size">window</label>
+              <input id="window_size" type="number" min="1" value="20">
+            </div>
+          </div>
+          <div class="field">
+            <label for="prompt">Сообщение</label>
+            <textarea id="prompt" required placeholder="Запрос, который может конфликтовать с инвариантами…"></textarea>
+          </div>
+          <div class="actions">
+            <button type="submit" id="submit">Отправить</button>
+            <button type="button" class="secondary" id="btn-clear">Очистить диалог</button>
+            <button type="button" class="secondary" id="btn-reset">Сбросить диалог</button>
+          </div>
+          <div class="actions">
+            <button type="button" class="conflict" id="p-react">Конфликт: React</button>
+            <button type="button" class="conflict" id="p-jwt">Конфликт: JWT</button>
+            <button type="button" class="conflict" id="p-kyle">Конфликт: Кайл 35%</button>
+            <button type="button" class="ok" id="p-vue">OK: Vue структура</button>
+          </div>
+        </form>
+        <div id="thread"></div>
+        <div id="global-error"></div>
+      </section>
+
+      <aside>
+        <div class="panel">
+          <h2>Токены</h2>
+          <dl class="tok">
+            <dt>prompt</dt><dd id="tok-prompt">—</dd>
+            <dt>invariants</dt><dd id="tok-inv">—</dd>
+            <dt>dialog</dt><dd id="tok-dialog">—</dd>
+            <dt>active</dt><dd id="tok-active">—</dd>
+            <dt>cost</dt><dd id="tok-cost">—</dd>
+          </dl>
+          <details class="payload"><summary>Last API messages</summary><pre id="payload">—</pre></details>
+        </div>
+
+        <div class="panel inv">
+          <h2>Invariants</h2>
+          <p class="hint">Не в диалоге. Выключенные не попадают в prompt.</p>
+          <table class="inv">
+            <thead><tr><th>on</th><th>cat</th><th>statement</th><th></th></tr></thead>
+            <tbody id="inv-body"></tbody>
+          </table>
+          <div class="row two" style="margin-top:0.55rem">
+            <div class="field">
+              <label for="inv-cat">category</label>
+              <select id="inv-cat">
+                <option value="architecture">architecture</option>
+                <option value="tech_decision">tech_decision</option>
+                <option value="stack" selected>stack</option>
+                <option value="business_rule">business_rule</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="inv-id">id (optional)</label>
+              <input id="inv-id" type="text" placeholder="auto">
+            </div>
+          </div>
+          <div class="field">
+            <label for="inv-statement">statement</label>
+            <textarea id="inv-statement" placeholder="Новое жёсткое правило…"></textarea>
+          </div>
+          <div class="actions">
+            <button type="button" class="inv" id="btn-add-inv">Добавить</button>
+            <button type="button" class="secondary" id="btn-demo">Reset demo</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+  <script>
+    const els = {
+      form: document.getElementById("chat-form"),
+      role: document.getElementById("role"),
+      model: document.getElementById("model"),
+      limit: document.getElementById("context_limit"),
+      window: document.getElementById("window_size"),
+      prompt: document.getElementById("prompt"),
+      submit: document.getElementById("submit"),
+      thread: document.getElementById("thread"),
+      error: document.getElementById("global-error"),
+      invBody: document.getElementById("inv-body"),
+    };
+
+    function md(t) { try { return marked.parse(t || ""); } catch { return (t||"").replace(/</g,"&lt;"); } }
+    function showError(m) { els.error.textContent = m || ""; }
+
+    function renderThread(messages) {
+      els.thread.innerHTML = "";
+      if (!messages || !messages.length) {
+        els.thread.innerHTML = '<p class="empty">Диалог пуст (инварианты живут отдельно).</p>';
+        return;
+      }
+      for (const m of messages) {
+        const div = document.createElement("div");
+        div.className = m.role === "user" ? "bubble user" : "bubble md";
+        div.innerHTML = `<div class="who">${m.role === "user" ? "Вы" : "Агент"}</div>` +
+          (m.role === "assistant" ? md(m.content) : (m.content||"").replace(/</g,"&lt;"));
+        els.thread.appendChild(div);
+      }
+      els.thread.scrollTop = els.thread.scrollHeight;
+    }
+
+    function renderInvariants(items) {
+      els.invBody.innerHTML = "";
+      if (!items || !items.length) {
+        els.invBody.innerHTML = '<tr><td colspan="4" class="empty">нет инвариантов</td></tr>';
+        return;
+      }
+      for (const item of items) {
+        const tr = document.createElement("tr");
+        if (!item.active) tr.className = "off";
+        tr.innerHTML = `
+          <td><input type="checkbox" ${item.active ? "checked" : ""} data-id="${item.id}"></td>
+          <td><span class="tag">${item.category}</span><div class="hint"><code>${item.id}</code></div></td>
+          <td>${String(item.statement||"").replace(/</g,"&lt;")}</td>
+          <td><button type="button" class="secondary" data-del="${item.id}">✕</button></td>`;
+        tr.querySelector("input").addEventListener("change", async (ev) => {
+          try {
+            const res = await fetch("/api/invariants/toggle", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: item.id, active: ev.target.checked }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "toggle failed");
+            applyState(data.state);
+          } catch (e) { showError(String(e)); }
+        });
+        tr.querySelector("button").addEventListener("click", async () => {
+          if (!confirm("Удалить инвариант?")) return;
+          try {
+            const res = await fetch("/api/invariants/delete", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: item.id }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "delete failed");
+            applyState(data.state);
+          } catch (e) { showError(String(e)); }
+        });
+        els.invBody.appendChild(tr);
+      }
+    }
+
+    function applyState(s) {
+      if (!s) return;
+      if (s.role) els.role.value = s.role;
+      if (s.model) els.model.value = s.model;
+      if (s.context_limit) els.limit.value = s.context_limit;
+      if (s.window_size) els.window.value = s.window_size;
+      renderThread(s.messages || []);
+      renderInvariants(s.invariants || []);
+      const t = s.tokens || {};
+      const L = t.layers || {};
+      document.getElementById("tok-prompt").textContent = t.prompt_estimate ?? "—";
+      document.getElementById("tok-inv").textContent = L.invariants ?? "—";
+      document.getElementById("tok-dialog").textContent = L.dialog ?? "—";
+      document.getElementById("tok-active").textContent = t.active_invariants ?? "—";
+      document.getElementById("tok-cost").textContent = t.cost_usd != null ? "$" + Number(t.cost_usd).toFixed(8) : "—";
+      document.getElementById("payload").textContent = JSON.stringify(s.last_api_messages || [], null, 2);
+    }
+
+    async function loadHistory() {
+      showError("");
+      try {
+        const res = await fetch("/api/history");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed");
+        applyState(data);
+      } catch (e) { showError(String(e)); }
+    }
+
+    els.form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const prompt = els.prompt.value.trim();
+      if (!prompt) return;
+      showError("");
+      els.submit.disabled = true;
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt,
+            model: els.model.value,
+            role: els.role.value.trim(),
+            context_limit: Number(els.limit.value),
+            window_size: Number(els.window.value),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "chat failed");
+        applyState(data);
+        els.prompt.value = "";
+      } catch (e) { showError(String(e)); }
+      finally { els.submit.disabled = false; }
+    });
+
+    document.getElementById("p-react").addEventListener("click", () => {
+      els.prompt.value = "Давай перепишем фронт на React — так привычнее команде.";
+    });
+    document.getElementById("p-jwt").addEventListener("click", () => {
+      els.prompt.value = "Сделаем JWT вместо cookie-сессий для API.";
+    });
+    document.getElementById("p-kyle").addEventListener("click", () => {
+      els.prompt.value = "Отдадим Кайлу 35% прибыли, иначе он не поможет.";
+    });
+    document.getElementById("p-vue").addEventListener("click", () => {
+      els.prompt.value = "Опиши структуру Vue 3 компонентов под текущий стек для экрана корзины. Кратко.";
+    });
+
+    document.getElementById("btn-clear").addEventListener("click", async () => {
+      try {
+        const res = await fetch("/api/dialog/clear", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "clear failed");
+        applyState(data.state);
+      } catch (e) { showError(String(e)); }
+    });
+    document.getElementById("btn-reset").addEventListener("click", async () => {
+      try {
+        const res = await fetch("/api/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "reset failed");
+        applyState(data.state);
+      } catch (e) { showError(String(e)); }
+    });
+
+    document.getElementById("btn-add-inv").addEventListener("click", async () => {
+      const statement = document.getElementById("inv-statement").value.trim();
+      if (!statement) return;
+      try {
+        const res = await fetch("/api/invariants", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: document.getElementById("inv-id").value.trim() || undefined,
+            category: document.getElementById("inv-cat").value,
+            statement,
+            active: true,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "add failed");
+        applyState(data.state);
+        document.getElementById("inv-statement").value = "";
+        document.getElementById("inv-id").value = "";
+      } catch (e) { showError(String(e)); }
+    });
+
+    document.getElementById("btn-demo").addEventListener("click", async () => {
+      if (!confirm("Восстановить демо-набор инвариантов?")) return;
+      try {
+        const res = await fetch("/api/invariants/reset-demo", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "demo failed");
+        applyState(data.state);
+      } catch (e) { showError(String(e)); }
+    });
+
+    loadHistory();
+  </script>
+</body>
+</html>

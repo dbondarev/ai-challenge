@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 12 — персонализация</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+  <style>
+    :root {
+      --ink: #1a1a1a; --muted: #5c5c5c; --line: #d6d2cb; --accent: #1f4d3a;
+      --accent-hover: #16392b; --surface: #fffdf9; --user-bg: #e8ebe4; --warn: #8b1e1e;
+      --profile: #5a3d6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; font-family: "IBM Plex Sans", "Segoe UI", sans-serif; color: var(--ink);
+      background: radial-gradient(ellipse at top left, #ebe6dc 0%, transparent 55%),
+        linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+    main { max-width: 56rem; margin: 0 auto; padding: 1.4rem 1rem 3rem; }
+    h1 { margin: 0 0 0.25rem; font-size: 1.55rem; font-weight: 600; }
+    .sub { margin: 0 0 1rem; color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
+    label { display: block; margin-bottom: 0.2rem; font-size: 0.75rem; color: var(--muted); }
+    .field { margin-bottom: 0.55rem; }
+    .row { display: grid; gap: 0.5rem; }
+    @media (min-width: 640px) { .row.two { grid-template-columns: 1fr 1fr; } }
+    textarea, select, input[type="number"] {
+      width: 100%; border: 1px solid var(--line); border-radius: 6px;
+      background: var(--surface); color: var(--ink); font: inherit; padding: 0.45rem 0.6rem;
+    }
+    textarea#role { min-height: 2.6rem; }
+    textarea#prompt { min-height: 3.6rem; resize: vertical; }
+    #p-create-text { min-height: 5rem; resize: vertical; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.4rem 0 0.65rem; }
+    button {
+      appearance: none; border: 0; border-radius: 6px; background: var(--accent);
+      color: #f7f7f5; font: inherit; font-weight: 500; padding: 0.45rem 0.8rem; cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button.profile { background: var(--profile); }
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button.secondary:hover:not(:disabled) { background: var(--user-bg); }
+    button.profile:hover:not(:disabled) { filter: brightness(1.08); background: var(--profile); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+    #thread {
+      margin: 0.5rem 0; display: flex; flex-direction: column; gap: 0.5rem;
+      max-height: 28rem; overflow: auto;
+    }
+    .bubble {
+      padding: 0.6rem 0.75rem; border-radius: 8px; border: 1px solid var(--line);
+      background: var(--surface); line-height: 1.45; font-size: 0.88rem;
+    }
+    .bubble.user { background: var(--user-bg); }
+    .bubble .who {
+      margin: 0 0 0.2rem; font-size: 0.66rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted);
+    }
+    .bubble.md p { margin: 0.3rem 0; }
+    .panel {
+      border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+      padding: 0.8rem; margin-bottom: 0.9rem;
+    }
+    .panel h2 { margin: 0 0 0.35rem; font-size: 0.92rem; color: var(--profile); }
+    .panel .layer-hint { margin: 0 0 0.5rem; font-size: 0.74rem; color: var(--muted); }
+    .profile-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.55rem; }
+    .chip {
+      border: 1px solid var(--line); border-radius: 999px; padding: 0.25rem 0.65rem;
+      font-size: 0.78rem; cursor: pointer; background: #f7f3ec;
+      color: var(--ink); font-weight: 500;
+    }
+    .chip:hover:not(:disabled) { background: #efe8dc; color: var(--ink); }
+    .chip.active { background: var(--profile); color: #fff; border-color: var(--profile); }
+    .chip.active:hover:not(:disabled) { background: var(--profile); color: #fff; filter: brightness(1.08); }
+    .active-profile-view {
+      background: #f7f3ec; border: 1px solid var(--line); border-radius: 10px;
+      padding: 0.65rem 0.75rem; margin-bottom: 0.75rem; font-size: 0.88rem;
+    }
+    .active-profile-view .ap-name { font-weight: 600; margin-bottom: 0.35rem; }
+    .active-profile-view .ap-row { color: var(--muted); margin: 0.15rem 0; }
+    .active-profile-view .ap-row b { color: var(--ink); font-weight: 500; }
+    .compare-box {
+      margin-top: 0.5rem; padding: 0.55rem; border: 1px dashed var(--line); border-radius: 6px;
+      font-size: 0.8rem; color: var(--muted);
+    }
+    #global-error { margin-top: 0.45rem; color: var(--warn); white-space: pre-wrap; font-size: 0.86rem; }
+    .empty { color: var(--muted); font-size: 0.84rem; }
+    details.payload { margin-top: 0.5rem; font-size: 0.78rem; color: var(--muted); }
+    details.payload pre {
+      margin: 0.3rem 0 0; max-height: 14rem; overflow: auto; background: #1f2421; color: #e8ebe6;
+      padding: 0.5rem 0.6rem; border-radius: 6px; white-space: pre-wrap; font-size: 0.7rem;
+    }
+    .meta { font-size: 0.75rem; color: var(--muted); margin-top: 0.35rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 12 — персонализация</h1>
+    <p class="sub">
+      Только профили и диалог. Переключай профиль → тот же вопрос → сравни тон ответа.
+      Блок <code>Active user profile</code> всегда в prompt.
+    </p>
+
+    <div class="panel">
+      <h2>Профили</h2>
+      <p class="layer-hint">Имя и preferences агент извлекает из текста. Переключение очищает диалог.</p>
+      <div class="profile-chips" id="profile-chips"></div>
+      <div id="active-profile-view" class="active-profile-view"></div>
+      <div class="field">
+        <label for="p-create-text">Новый профиль — одним текстом</label>
+        <textarea id="p-create-text" placeholder="Меня зовут … Говори так-то … Формат ответов …"></textarea>
+      </div>
+      <div class="actions">
+        <button type="button" class="profile" id="btn-create-profile">Создать профиль</button>
+        <button type="button" class="secondary" id="btn-delete-profile">Удалить активный</button>
+      </div>
+      <div class="compare-box">
+        Профиль A → вопрос → профиль B → тот же вопрос. В Last API messages должен меняться блок профиля.
+      </div>
+    </div>
+
+    <div class="panel" style="color: inherit;">
+      <h2 style="color: var(--ink);">Диалог</h2>
+      <form id="chat-form">
+        <div class="field">
+          <label for="role">Базовая роль</label>
+          <textarea id="role">Ты персональный ассистент. Всегда учитывай активный профиль пользователя (стиль, формат, ограничения). Не выдумывай факты о пользователе сверх профиля.</textarea>
+        </div>
+        <div class="row two">
+          <div class="field">
+            <label for="model">Модель</label>
+            <select id="model">
+              <option value="gpt-5.4" selected>gpt-5.4 · 1.05M</option>
+              <option value="gpt-5.4-mini">gpt-5.4-mini · 400K</option>
+              <option value="gpt-5.4-nano">gpt-5.4-nano · 400K</option>
+              <option value="gpt-5.5">gpt-5.5 · 1.05M</option>
+              <option value="gpt-4o">gpt-4o · 128K</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Лимит контекста модели</label>
+            <div class="meta" id="context-limit" style="padding: 0.55rem 0;">—</div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="prompt">Сообщение</label>
+          <textarea id="prompt" required placeholder="Один и тот же вопрос для разных профилей…"></textarea>
+        </div>
+        <div class="actions">
+          <button type="submit" id="submit">Отправить</button>
+          <button type="button" class="secondary" id="btn-preset">Пресет-вопрос</button>
+          <button type="button" class="secondary" id="btn-clear-dialog">Очистить диалог</button>
+        </div>
+      </form>
+      <div id="thread"></div>
+      <div class="meta" id="stats"></div>
+      <div id="global-error"></div>
+      <details class="payload">
+        <summary>Last API messages</summary>
+        <pre id="payload">—</pre>
+      </details>
+    </div>
+  </main>
+  <script>
+    const PREF_KEYS = ["style", "format", "constraints", "language", "length", "emoji"];
+    const PRESET = "Кратко предложи план запуска школьного снек-бизнеса на неделю: цель $200, бюджет $40, товар Cheesy Poofs. Учти мой стиль.";
+    let state = null;
+    let editingId = null;
+
+    const $ = (id) => document.getElementById(id);
+    const els = {
+      form: $("chat-form"),
+      role: $("role"),
+      model: $("model"),
+      prompt: $("prompt"),
+      submit: $("submit"),
+      thread: $("thread"),
+      error: $("global-error"),
+      payload: $("payload"),
+      chips: $("profile-chips"),
+      createText: $("p-create-text"),
+      activeView: $("active-profile-view"),
+      stats: $("stats"),
+      contextLimit: $("context-limit"),
+    };
+
+    function md(t) { try { return marked.parse(t || ""); } catch { return (t || "").replace(/</g, "&lt;"); } }
+    function showError(m) { els.error.textContent = m || ""; }
+    function esc(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+    function formatWindow(n) {
+      n = Number(n) || 0;
+      if (n >= 1000000) return (n / 1000000).toFixed(2).replace(/\\.00$/, "") + "M";
+      if (n >= 1000) return Math.round(n / 1000) + "K";
+      return String(n);
+    }
+
+    function renderThread(messages) {
+      els.thread.innerHTML = "";
+      if (!messages || !messages.length) {
+        els.thread.innerHTML = '<p class="empty">Диалог пуст.</p>';
+        return;
+      }
+      for (const m of messages) {
+        const div = document.createElement("div");
+        div.className = m.role === "user" ? "bubble user" : "bubble md";
+        const who = m.role === "user" ? "Вы" : "Агент";
+        const body = m.role === "assistant" ? md(m.content) : esc(m.content || "");
+        div.innerHTML = '<div class="who">' + who + '</div>' + body;
+        els.thread.appendChild(div);
+      }
+      els.thread.scrollTop = els.thread.scrollHeight;
+    }
+
+    function renderActiveProfile(p) {
+      editingId = p ? p.id : null;
+      if (!p) {
+        els.activeView.innerHTML = '<p class="empty">Нет активного профиля</p>';
+        return;
+      }
+      const prefs = p.preferences || {};
+      let rows = '<div class="ap-name">' + esc(p.name || p.id) + '</div>';
+      if (p.notes) rows += '<div class="ap-row"><b>notes:</b> ' + esc(p.notes) + '</div>';
+      for (const key of PREF_KEYS) {
+        if (prefs[key]) rows += '<div class="ap-row"><b>' + key + ':</b> ' + esc(prefs[key]) + '</div>';
+      }
+      els.activeView.innerHTML = rows;
+    }
+
+    function renderChips(profiles, activeId) {
+      els.chips.innerHTML = "";
+      for (const p of profiles || []) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "chip" + (p.id === activeId ? " active" : "");
+        b.textContent = p.name || p.id;
+        b.addEventListener("click", async () => {
+          if (p.id === activeId) return;
+          try {
+            const res = await fetch("/api/profiles/activate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ profile_id: p.id, clear_dialog: true }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "activate failed");
+            applyState(data.state);
+          } catch (e) { showError(String(e)); }
+        });
+        els.chips.appendChild(b);
+      }
+    }
+
+    function applyState(s) {
+      state = s;
+      if (!s) return;
+      if (s.role) els.role.value = s.role;
+      if (s.model) els.model.value = s.model;
+      els.contextLimit.textContent = formatWindow(s.context_limit) + " токенов";
+      renderChips(s.profiles || [], s.active_profile_id);
+      renderActiveProfile(s.active_profile);
+      const msgs = s.messages || s.short_term || [];
+      renderThread(msgs);
+      const t = s.tokens || {};
+      const name = (s.active_profile && s.active_profile.name) || s.active_profile_id || "—";
+      els.stats.textContent =
+        "профиль: " + name +
+        " · сообщения: " + msgs.length +
+        " · prompt ≈ " + (t.prompt_estimate != null ? t.prompt_estimate : "—") +
+        (t.cost_usd != null ? " · $" + Number(t.cost_usd).toFixed(6) : "");
+      els.payload.textContent = JSON.stringify(s.last_api_messages || [], null, 2);
+    }
+
+    $("btn-create-profile").addEventListener("click", async () => {
+      const text = (els.createText.value || "").trim();
+      if (!text) { showError("Опиши пользователя в текстовом поле"); return; }
+      showError("");
+      const btn = $("btn-create-profile");
+      btn.disabled = true;
+      try {
+        const res = await fetch("/api/profiles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, activate: true }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "create failed");
+        els.createText.value = "";
+        applyState(data.state);
+      } catch (e) { showError(String(e)); }
+      finally { btn.disabled = false; }
+    });
+
+    $("btn-delete-profile").addEventListener("click", async () => {
+      if (!editingId) return;
+      if (!confirm("Удалить этот профиль?")) return;
+      try {
+        const res = await fetch("/api/profiles/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile_id: editingId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "delete failed");
+        applyState(data.state);
+      } catch (e) { showError(String(e)); }
+    });
+
+    $("btn-preset").addEventListener("click", () => { els.prompt.value = PRESET; });
+
+    $("btn-clear-dialog").addEventListener("click", async () => {
+      try {
+        const res = await fetch("/api/dialog/clear", { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "clear failed");
+        applyState(data.state);
+      } catch (e) { showError(String(e)); }
+    });
+
+    els.form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const prompt = els.prompt.value.trim();
+      if (!prompt) return;
+      showError("");
+      els.submit.disabled = true;
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt,
+            model: els.model.value,
+            role: els.role.value,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "chat failed");
+        els.prompt.value = "";
+        applyState(data);
+      } catch (e) { showError(String(e)); }
+      finally { els.submit.disabled = false; }
+    });
+
+    fetch("/api/history")
+      .then((r) => r.json())
+      .then(applyState)
+      .catch((e) => showError(String(e)));
+  </script>
+</body>
+</html>
