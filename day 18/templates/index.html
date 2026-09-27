@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 18 - Mail digest</title>
+  <style>
+    :root {
+      --ink: #1a1a1a; --muted: #5c5c5c; --line: #d6d2cb; --accent: #1f4d3a;
+      --surface: #fffdf9; --warn: #8b1e1e; --ok: #1f4d3a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink); background: linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+    main { max-width: 880px; margin: 0 auto; padding: 1.4rem 1.1rem 2.5rem; }
+    h1 { margin: 0 0 0.3rem; font-size: 1.35rem; font-weight: 600; }
+    .sub { margin: 0 0 1rem; color: var(--muted); font-size: 0.88rem; line-height: 1.45; }
+    .panel {
+      border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+      padding: 0.85rem; margin-bottom: 0.85rem;
+    }
+    .panel h2 { margin: 0 0 0.45rem; font-size: 0.95rem; }
+    button {
+      appearance: none; border: 0; border-radius: 6px; background: var(--accent);
+      color: #f7f7f5; font: inherit; font-weight: 500; padding: 0.5rem 0.9rem; cursor: pointer;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .meta { font-size: 0.82rem; color: var(--muted); line-height: 1.45; white-space: pre-wrap; }
+    .summary {
+      margin-top: 0.5rem; padding: 0.65rem; border-radius: 6px;
+      background: #1f2421; color: #e8ebe6; font-size: 0.82rem; white-space: pre-wrap;
+      max-height: 22rem; overflow: auto; font-family: ui-monospace, monospace;
+    }
+    #error { color: var(--warn); font-size: 0.86rem; white-space: pre-wrap; margin-top: 0.4rem; }
+    .ok { color: var(--ok); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 0.4rem; }
+    th, td { text-align: left; padding: 0.35rem 0.3rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-size: 0.7rem; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 18 - Mail digest + Telegram</h1>
+    <p class="sub">
+      Cron: каждый день <strong>06:00 America/Chicago</strong> (Austin).
+      Демо: та же джоба по кнопке Run now. Почта через MCP <code>m365_list_recent_messages</code>.
+    </p>
+
+    <div class="panel">
+      <h2>Статус</h2>
+      <div class="meta" id="status">...</div>
+      <div style="margin-top:0.6rem">
+        <button type="button" id="btn-run">Run now</button>
+      </div>
+      <div id="error"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Последняя сводка</h2>
+      <div class="meta" id="last-meta">-</div>
+      <div class="summary" id="last-summary">-</div>
+    </div>
+
+    <div class="panel">
+      <h2>История</h2>
+      <table>
+        <thead><tr><th>When</th><th>Trigger</th><th>Mails</th><th>TG</th></tr></thead>
+        <tbody id="hist"></tbody>
+      </table>
+    </div>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function esc(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    async function refresh() {
+      const st = await fetch("/api/status").then((r) => r.json());
+      const sch = st.scheduler || {};
+      const dig = st.digest || {};
+      const last = dig.last;
+      $("status").textContent =
+        "cron: " + (sch.enabled ? "on" : "off") +
+        " · " + (sch.expression || "") + " " + (sch.timezone || "") + "\n" +
+        (sch.description || "") + "\n" +
+        "openai: " + (st.has_openai ? "ok" : "missing") +
+        " · telegram: " + (st.has_telegram ? "ok" : "missing token/chat_id") + "\n" +
+        "mcp: " + ((st.mcp && st.mcp.serverScript) || "?") +
+        (st.running ? "\n[digest running...]" : "");
+
+      if (last) {
+        $("last-meta").textContent =
+          last.at + " · trigger=" + last.trigger +
+          " · mails=" + last.mail_count +
+          " · tg=" + (last.telegram && last.telegram.ok ? "sent" : (last.telegram && last.telegram.skipped ? "skipped" : "fail"));
+        $("last-summary").textContent = last.summary || "-";
+      } else {
+        $("last-meta").textContent = "Пока нет прогонов";
+        $("last-summary").textContent = "-";
+      }
+
+      const list = await fetch("/api/digest/list?limit=12").then((r) => r.json());
+      const tb = $("hist");
+      tb.innerHTML = "";
+      for (const d of (list.digests || [])) {
+        const tr = document.createElement("tr");
+        const tg = d.telegram && d.telegram.ok ? "ok" : (d.telegram && d.telegram.skipped ? "skip" : "fail");
+        tr.innerHTML =
+          "<td>" + esc((d.at || "").replace("T", " ").slice(0, 19)) + "</td>" +
+          "<td>" + esc(d.trigger) + "</td>" +
+          "<td>" + esc(d.mail_count) + "</td>" +
+          "<td>" + esc(tg) + "</td>";
+        tb.appendChild(tr);
+      }
+    }
+
+    $("btn-run").onclick = async () => {
+      $("error").textContent = "";
+      $("btn-run").disabled = true;
+      $("btn-run").textContent = "Running...";
+      try {
+        const res = await fetch("/api/digest/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ trigger: "manual" }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.ok === false) throw new Error(data.error || res.statusText);
+        if (data.telegram_error) {
+          $("error").textContent = "Digest saved, Telegram: " + data.telegram_error;
+        }
+        await refresh();
+      } catch (e) {
+        $("error").textContent = String(e.message || e);
+      } finally {
+        $("btn-run").disabled = false;
+        $("btn-run").textContent = "Run now";
+      }
+    };
+
+    refresh().catch((e) => { $("error").textContent = String(e); });
+    setInterval(() => { refresh().catch(() => {}); }, 15000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 20 — Orchestration MCP</title>
+  <style>
+    :root {
+      --ink: #1a1a1a; --muted: #5c5c5c; --line: #d6d2cb; --accent: #1f4d3a;
+      --surface: #fffdf9; --warn: #8b1e1e; --mail: #1f4d6b; --sing: #6b4a1f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+    main { max-width: 920px; margin: 0 auto; padding: 1.4rem 1.1rem 2.5rem; }
+    h1 { margin: 0 0 0.25rem; font-size: 1.35rem; font-weight: 600; }
+    h2 { margin: 0 0 0.5rem; font-size: 1rem; font-weight: 600; }
+    .sub { margin: 0 0 1rem; color: var(--muted); font-size: 0.88rem; line-height: 1.45; }
+    .panel {
+      border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+      padding: 0.85rem; margin-bottom: 0.85rem;
+    }
+    .meta { font-size: 0.78rem; color: var(--muted); white-space: pre-wrap; }
+    label { display: block; font-size: 0.74rem; color: var(--muted); margin-bottom: 0.25rem; }
+    textarea {
+      width: 100%; min-height: 4.5rem; border: 1px solid var(--line); border-radius: 6px;
+      font: inherit; padding: 0.5rem 0.6rem; resize: vertical;
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.45rem; }
+    button {
+      appearance: none; border: 0; border-radius: 6px; background: var(--accent);
+      color: #f7f7f5; font: inherit; font-weight: 500; padding: 0.45rem 0.8rem; cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #thread { max-height: 36vh; overflow: auto; display: flex; flex-direction: column; gap: 0.45rem; }
+    .bubble {
+      padding: 0.55rem 0.7rem; border-radius: 8px; border: 1px solid var(--line);
+      font-size: 0.88rem; line-height: 1.45; white-space: pre-wrap;
+    }
+    .bubble.user { background: #e8ebe4; }
+    .err { color: var(--warn); font-size: 0.86rem; white-space: pre-wrap; margin-top: 0.4rem; }
+    .steps { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.55rem; }
+    .step {
+      border: 1px solid var(--line); border-radius: 8px; padding: 0.5rem 0.65rem;
+      font-size: 0.82rem; background: #faf8f4;
+    }
+    .step .who { font-weight: 600; }
+    .step.m365 .who { color: var(--mail); }
+    .step.singularity .who { color: var(--sing); }
+    .step pre {
+      margin: 0.3rem 0 0; white-space: pre-wrap; word-break: break-word;
+      font-size: 0.72rem; font-family: ui-monospace, monospace; max-height: 7rem; overflow: auto;
+    }
+    .badge {
+      display: inline-block; font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 4px;
+      border: 1px solid var(--line); margin-right: 0.3rem;
+    }
+    .badge.ok { color: var(--accent); }
+    .badge.bad { color: var(--warn); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 20 — Orchestration MCP</h1>
+    <p class="sub">
+      Два MCP: <code>m365</code> (почта) + <code>singularity</code> (задачи).
+      Агент сам выбирает инструменты и ведёт длинный флоу.
+    </p>
+
+    <div class="panel">
+      <div class="meta" id="status">…</div>
+    </div>
+
+    <div class="panel">
+      <h2>Чат</h2>
+      <div id="thread"></div>
+      <label for="msg">Сообщение</label>
+      <textarea id="msg" placeholder="Найди в почте … и создай задачу в Singularity…"></textarea>
+      <div class="actions">
+        <button type="button" id="btn-send">Отправить</button>
+        <button type="button" class="secondary" id="btn-preset">Preset: mail → задача</button>
+        <button type="button" class="secondary" id="btn-tools">Показать tools</button>
+      </div>
+      <div class="err" id="error"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Trace (порядок вызовов)</h2>
+      <div class="steps" id="steps"></div>
+    </div>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let busy = false;
+
+    function esc(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    function setBusy(v) {
+      busy = v;
+      document.querySelectorAll("button").forEach((b) => { b.disabled = v; });
+    }
+
+    async function loadStatus() {
+      try {
+        const r = await fetch("/api/status");
+        const j = await r.json();
+        if (!j.ok) {
+          $("status").textContent = "ERROR: " + (j.error || "status failed") +
+            "\ntoken: " + (j.has_singularity_token ? "yes" : "NO");
+          return;
+        }
+        const counts = j.tool_counts || {};
+        const hub = j.hub || {};
+        const servers = hub.servers || {};
+        let lines = "port " + j.port +
+          " | openai: " + (j.has_openai ? "yes (" + j.openai_model + ")" : "no") +
+          " | tools: " + j.tool_total +
+          "\nm365: " + (counts.m365 || 0) + " tools | transport " + (servers.m365?.transport || "?") +
+          "\nsingularity: " + (counts.singularity || 0) + " tools | transport " + (servers.singularity?.transport || "?") +
+          " | token: " + (hub.has_singularity_token ? "yes" : "NO");
+        if (servers.singularity?.detail) lines += "\nsingularity detail: " + servers.singularity.detail;
+        $("status").textContent = lines;
+      } catch (e) {
+        $("status").textContent = String(e);
+      }
+    }
+
+    function renderTrace(trace) {
+      const el = $("steps");
+      el.innerHTML = "";
+      (trace || []).forEach((t) => {
+        const div = document.createElement("div");
+        div.className = "step " + (t.server || "");
+        div.innerHTML =
+          '<div class="who">' + esc(String(t.order)) + ". " + esc(t.server) + " / " + esc(t.tool) +
+          ' <span class="badge ' + (t.ok ? "ok" : "bad") + '">' + (t.ok ? "ok" : "err") + "</span></div>" +
+          "<pre>args: " + esc(t.args_preview || JSON.stringify(t.arguments || {})) +
+          "\nresult: " + esc(t.result_preview || (t.result || "").slice(0, 500)) + "</pre>";
+        el.appendChild(div);
+      });
+      if (!(trace || []).length) {
+        el.innerHTML = '<div class="meta">Пока пусто — отправьте запрос.</div>';
+      }
+    }
+
+    function addBubble(role, text) {
+      const div = document.createElement("div");
+      div.className = "bubble " + (role === "user" ? "user" : "");
+      div.textContent = text;
+      $("thread").appendChild(div);
+      $("thread").scrollTop = $("thread").scrollHeight;
+    }
+
+    async function sendChat() {
+      $("error").textContent = "";
+      const message = $("msg").value.trim();
+      if (!message || busy) return;
+      addBubble("user", message);
+      $("msg").value = "";
+      setBusy(true);
+      try {
+        const r = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
+        });
+        const j = await r.json();
+        if (!r.ok || j.ok === false) throw new Error(j.error || "chat failed");
+        addBubble("assistant", j.reply || "");
+        renderTrace(j.tool_trace);
+        if (j.cross_server) {
+          addBubble("assistant", "✓ Cross-server flow: " + (j.servers_used || []).join(" → "));
+        }
+      } catch (e) {
+        $("error").textContent = e.message || String(e);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    $("btn-send").onclick = sendChat;
+    $("btn-preset").onclick = () => {
+      $("msg").value =
+        "Обработай почту за последнюю неделю порциями (по ~1 дню, top≤15). " +
+        "Только важные actionable задачи (не уведомления/рассылки) — создай в Singularity inbox с title '[Day20] …'. " +
+        "После каждого дня — создать задачи, потом следующий день.";
+      sendChat();
+    };
+    $("btn-tools").onclick = async () => {
+      setBusy(true);
+      try {
+        const r = await fetch("/api/tools");
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || "tools failed");
+        addBubble("assistant", "Tools (" + j.tools.length + "):\n" +
+          j.tools.map((t) => t.name).join("\n"));
+      } catch (e) {
+        $("error").textContent = e.message || String(e);
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    renderTrace([]);
+    loadStatus();
+  </script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "ai-challenge-day-19",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Day 19 - MCP tool composition for mail",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/app.js",
+    "ui": "node src/app.js",
+    "mcp": "node src/mcp_compose_server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "openai": "^4.77.0",
+    "zod": "^3.24.0"
+  }
+}

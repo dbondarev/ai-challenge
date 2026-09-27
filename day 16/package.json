@@ -1,0 +1,19 @@
+{
+  "name": "ai-challenge-day-16",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Day 16 - MCP client connecting to m365-mail and listing tools",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/cli.js",
+    "ui": "node src/app.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}

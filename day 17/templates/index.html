@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 17 — Agent + MCP tool</title>
+  <style>
+    :root {
+      --ink: #1a1a1a; --muted: #5c5c5c; --line: #d6d2cb; --accent: #1f4d3a;
+      --surface: #fffdf9; --user-bg: #e8ebe4; --warn: #8b1e1e; --ok: #1f4d3a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink); background: linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+    main { max-width: 880px; margin: 0 auto; padding: 1.4rem 1.1rem 2.5rem; }
+    h1 { margin: 0 0 0.3rem; font-size: 1.35rem; font-weight: 600; }
+    .sub { margin: 0 0 1rem; color: var(--muted); font-size: 0.88rem; line-height: 1.45; }
+    .panel {
+      border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+      padding: 0.85rem; margin-bottom: 0.85rem;
+    }
+    label { display: block; font-size: 0.74rem; color: var(--muted); margin-bottom: 0.25rem; }
+    textarea {
+      width: 100%; min-height: 4.5rem; border: 1px solid var(--line); border-radius: 6px;
+      font: inherit; padding: 0.5rem 0.6rem; resize: vertical;
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+    button {
+      appearance: none; border: 0; border-radius: 6px; background: var(--accent);
+      color: #f7f7f5; font: inherit; font-weight: 500; padding: 0.45rem 0.8rem; cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #thread { display: flex; flex-direction: column; gap: 0.5rem; max-height: 42vh; overflow: auto; }
+    .bubble {
+      padding: 0.55rem 0.7rem; border-radius: 8px; border: 1px solid var(--line);
+      background: var(--surface); font-size: 0.88rem; line-height: 1.45; white-space: pre-wrap;
+    }
+    .bubble.user { background: var(--user-bg); }
+    .bubble .who {
+      margin: 0 0 0.2rem; font-size: 0.65rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted);
+    }
+    .trace {
+      margin-top: 0.55rem; padding: 0.55rem; border-radius: 6px;
+      background: #1f2421; color: #e8ebe6; font-size: 0.75rem; font-family: ui-monospace, monospace;
+      white-space: pre-wrap; max-height: 16rem; overflow: auto;
+    }
+    .trace .label { color: #9ec9b0; margin-bottom: 0.25rem; }
+    #error { color: var(--warn); font-size: 0.86rem; white-space: pre-wrap; margin-top: 0.4rem; }
+    .meta { font-size: 0.78rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 17 — Agent + MCP tool</h1>
+    <p class="sub">
+      OpenAI-агент вызывает инструменты MCP-сервера <code>m365-mail</code> (stdio).
+      Демо: <code>m365_connection_status</code>.
+    </p>
+
+    <div class="panel">
+      <div class="meta" id="health">…</div>
+      <div id="thread"></div>
+    </div>
+
+    <div class="panel">
+      <label for="msg">Сообщение</label>
+      <textarea id="msg" placeholder="Проверь статус подключения к M365…"></textarea>
+      <div class="actions">
+        <button type="button" id="btn-send">Отправить</button>
+        <button type="button" class="secondary" id="btn-preset">Проверь статус подключения к M365</button>
+      </div>
+      <div id="error"></div>
+    </div>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let busy = false;
+
+    function esc(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    function addBubble(role, text, trace) {
+      const div = document.createElement("div");
+      div.className = "bubble " + (role === "user" ? "user" : "");
+      const who = role === "user" ? "Вы" : "Агент";
+      let html = '<div class="who">' + who + "</div>" + esc(text);
+      if (trace && trace.length) {
+        html += '<div class="trace"><div class="label">MCP tool call</div>';
+        for (const t of trace) {
+          html += esc(t.name) + "(" + esc(JSON.stringify(t.arguments || {})) + ")\n";
+          html += "→ " + esc(t.result || "") + "\n\n";
+        }
+        html += "</div>";
+      }
+      div.innerHTML = html;
+      $("thread").appendChild(div);
+      $("thread").scrollTop = $("thread").scrollHeight;
+    }
+
+    async function send(text) {
+      if (busy || !text.trim()) return;
+      busy = true;
+      $("error").textContent = "";
+      $("btn-send").disabled = true;
+      $("btn-preset").disabled = true;
+      addBubble("user", text.trim());
+      $("msg").value = "";
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: text.trim() }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.ok === false) throw new Error(data.error || res.statusText);
+        addBubble("assistant", data.reply || "", data.tool_trace || []);
+        if (!(data.tool_trace && data.tool_trace.length)) {
+          $("error").textContent = "Внимание: агент ответил без MCP tool call.";
+        }
+      } catch (e) {
+        $("error").textContent = String(e.message || e);
+      } finally {
+        busy = false;
+        $("btn-send").disabled = false;
+        $("btn-preset").disabled = false;
+      }
+    }
+
+    $("btn-send").onclick = () => send($("msg").value);
+    $("btn-preset").onclick = () => {
+      $("msg").value = "Проверь статус подключения к M365";
+      send($("msg").value);
+    };
+    $("msg").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        send($("msg").value);
+      }
+    });
+
+    fetch("/api/health").then((r) => r.json()).then((h) => {
+      $("health").textContent =
+        "model: " + (h.model || "?") +
+        " · openai: " + (h.has_openai_key ? "ok" : "missing") +
+        " · mcp: " + ((h.mcp && h.mcp.script) || "?");
+    }).catch((e) => { $("health").textContent = String(e); });
+  </script>
+</body>
+</html>

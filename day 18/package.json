@@ -1,0 +1,21 @@
+{
+  "name": "ai-challenge-day-18",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Day 18 - mail digest cron + Telegram",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/app.js",
+    "ui": "node src/app.js",
+    "mcp": "node src/mcp_digest_server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "node-cron": "^3.0.3",
+    "openai": "^4.77.0",
+    "zod": "^3.24.0"
+  }
+}

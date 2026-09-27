@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 19 — MCP composition</title>
+  <style>
+    :root {
+      --ink: #1a1a1a; --muted: #5c5c5c; --line: #d6d2cb; --accent: #1f4d3a;
+      --surface: #fffdf9; --warn: #8b1e1e; --ok: #1f4d3a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+    main { max-width: 920px; margin: 0 auto; padding: 1.4rem 1.1rem 2.5rem; }
+    h1 { margin: 0 0 0.25rem; font-size: 1.35rem; font-weight: 600; }
+    h2 { margin: 0 0 0.55rem; font-size: 1rem; font-weight: 600; }
+    .sub { margin: 0 0 1rem; color: var(--muted); font-size: 0.88rem; line-height: 1.45; }
+    .panel {
+      border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+      padding: 0.85rem; margin-bottom: 0.85rem;
+    }
+    label { display: block; font-size: 0.74rem; color: var(--muted); margin-bottom: 0.25rem; }
+    input, textarea, select {
+      width: 100%; border: 1px solid var(--line); border-radius: 6px;
+      font: inherit; padding: 0.45rem 0.55rem; margin-bottom: 0.45rem;
+    }
+    textarea { min-height: 3.5rem; resize: vertical; }
+    .row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; }
+    .row > div { flex: 1 1 180px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.35rem; }
+    button {
+      appearance: none; border: 0; border-radius: 6px; background: var(--accent);
+      color: #f7f7f5; font: inherit; font-weight: 500; padding: 0.45rem 0.8rem; cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button.danger { background: #6b2a2a; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .meta { font-size: 0.78rem; color: var(--muted); white-space: pre-wrap; }
+    .steps { display: flex; flex-direction: column; gap: 0.45rem; }
+    .step {
+      border: 1px solid var(--line); border-radius: 8px; padding: 0.55rem 0.65rem;
+      font-size: 0.84rem; background: #faf8f4;
+    }
+    .step .name { font-weight: 600; color: var(--ok); }
+    .step pre {
+      margin: 0.35rem 0 0; white-space: pre-wrap; word-break: break-word;
+      font-size: 0.72rem; font-family: ui-monospace, monospace; color: #333;
+      max-height: 8rem; overflow: auto;
+    }
+    .err { color: var(--warn); font-size: 0.86rem; white-space: pre-wrap; margin-top: 0.4rem; }
+    .bubble {
+      padding: 0.5rem 0.65rem; border-radius: 8px; border: 1px solid var(--line);
+      margin-bottom: 0.4rem; font-size: 0.86rem; white-space: pre-wrap;
+    }
+    .bubble.user { background: #e8ebe4; }
+    .trace {
+      margin-top: 0.4rem; padding: 0.45rem; border-radius: 6px;
+      background: #1f2421; color: #e8ebe6; font-size: 0.72rem;
+      font-family: ui-monospace, monospace; white-space: pre-wrap; max-height: 12rem; overflow: auto;
+    }
+    #thread { max-height: 28vh; overflow: auto; margin-bottom: 0.5rem; }
+    details { margin-top: 0.4rem; font-size: 0.84rem; }
+    code { font-size: 0.84em; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 19 — MCP tool composition</h1>
+    <p class="sub">
+      Цепочка: fetch (m365) → summarize → saveToFile.
+      Инструменты compose_* (+ <code>npm run mcp</code>). Rules — демо существующих m365 tools.
+    </p>
+
+    <div class="panel">
+      <div class="meta" id="status">…</div>
+    </div>
+
+    <div class="panel">
+      <h2>Пайплайн</h2>
+      <div class="row">
+        <div>
+          <label for="hours">Hours (day mode)</label>
+          <input id="hours" type="number" value="24" min="1" max="168">
+        </div>
+        <div>
+          <label for="query">Search query</label>
+          <input id="query" type="text" placeholder="from:someone subject:…">
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" id="btn-day">Пайплайн: сводка за день</button>
+        <button type="button" class="secondary" id="btn-search">Пайплайн: поиск</button>
+      </div>
+      <div class="err" id="pipe-err"></div>
+      <div class="meta" id="pipe-meta" style="margin-top:0.5rem"></div>
+      <div class="steps" id="steps" style="margin-top:0.6rem"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Rules (demo)</h2>
+      <div class="actions">
+        <button type="button" class="secondary" id="btn-rules">Показать rules</button>
+        <button type="button" class="secondary" id="btn-folders">Загрузить folders</button>
+      </div>
+      <pre class="meta" id="rules-out" style="max-height:14rem;overflow:auto;margin-top:0.5rem"></pre>
+      <details>
+        <summary>Create rule (confirm)</summary>
+        <div class="row" style="margin-top:0.5rem">
+          <div>
+            <label>displayName</label>
+            <input id="rule-name" placeholder="Day19 demo rule">
+          </div>
+          <div>
+            <label>senderContains</label>
+            <input id="rule-sender" placeholder="newsletter@example.com">
+          </div>
+          <div>
+            <label>moveToFolder (id)</label>
+            <select id="rule-folder"><option value="">— load folders —</option></select>
+          </div>
+          <div>
+            <label>sequence</label>
+            <input id="rule-seq" type="number" value="1" min="1">
+          </div>
+        </div>
+        <label><input type="checkbox" id="rule-confirm"> Я подтверждаю создание правила</label>
+        <div class="actions">
+          <button type="button" class="danger" id="btn-create-rule">Создать rule</button>
+        </div>
+        <div class="err" id="rule-err"></div>
+      </details>
+    </div>
+
+    <div class="panel">
+      <h2>Agent (compose tools)</h2>
+      <div id="thread"></div>
+      <label for="msg">Сообщение</label>
+      <textarea id="msg" placeholder="Сделай сводку почты за день и сохрани в файл"></textarea>
+      <div class="actions">
+        <button type="button" id="btn-chat">Отправить</button>
+        <button type="button" class="secondary" id="btn-preset">Сводка за день + сохранить</button>
+      </div>
+      <div class="err" id="chat-err"></div>
+    </div>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let busy = false;
+    const history = [];
+
+    function esc(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    function setBusy(v) {
+      busy = v;
+      document.querySelectorAll("button").forEach((b) => { b.disabled = v; });
+    }
+
+    async function loadStatus() {
+      try {
+        const r = await fetch("/api/status");
+        const j = await r.json();
+        $("status").textContent =
+          "port " + j.port +
+          " | openai: " + (j.has_openai ? "yes (" + j.openai_model + ")" : "no") +
+          "\nm365: " + (j.mcp?.args || []).join(" ") +
+          "\nout: " + j.out_dir;
+      } catch (e) {
+        $("status").textContent = String(e);
+      }
+    }
+
+    function renderSteps(steps) {
+      const el = $("steps");
+      el.innerHTML = "";
+      (steps || []).forEach((s) => {
+        const div = document.createElement("div");
+        div.className = "step";
+        div.innerHTML =
+          '<div class="name">Step ' + s.step + ": " + esc(s.name) + "</div>" +
+          "<pre>args/preview: " + esc(JSON.stringify(s.preview || {})) +
+          "\nresult: " + esc(s.result_preview || "") + "</pre>";
+        el.appendChild(div);
+      });
+    }
+
+    async function runPipeline(mode) {
+      $("pipe-err").textContent = "";
+      $("pipe-meta").textContent = "Running…";
+      setBusy(true);
+      try {
+        const body = {
+          mode,
+          hours: Number($("hours").value || 24),
+          query: $("query").value.trim(),
+        };
+        const r = await fetch("/api/pipeline", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const j = await r.json();
+        if (!r.ok || j.ok === false) throw new Error(j.error || "pipeline failed");
+        $("pipe-meta").textContent =
+          "ok | mail_count=" + j.mail_count + "\npath: " + j.path +
+          "\n\nsummary:\n" + (j.summary || "").slice(0, 1200);
+        renderSteps(j.steps);
+      } catch (e) {
+        $("pipe-err").textContent = e.message || String(e);
+        $("pipe-meta").textContent = "";
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    $("btn-day").onclick = () => runPipeline("day");
+    $("btn-search").onclick = () => {
+      if (!$("query").value.trim()) {
+        $("pipe-err").textContent = "Введите query";
+        return;
+      }
+      runPipeline("search");
+    };
+
+    $("btn-rules").onclick = async () => {
+      $("rules-out").textContent = "…";
+      setBusy(true);
+      try {
+        const r = await fetch("/api/rules/list", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+        const j = await r.json();
+        if (!r.ok || j.ok === false) throw new Error(j.error || "list failed");
+        $("rules-out").textContent = j.raw_text || JSON.stringify(j.parsed, null, 2);
+      } catch (e) {
+        $("rules-out").textContent = e.message || String(e);
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    $("btn-folders").onclick = async () => {
+      setBusy(true);
+      try {
+        const r = await fetch("/api/folders");
+        const j = await r.json();
+        if (!r.ok || j.ok === false) throw new Error(j.error || "folders failed");
+        const folders = j.parsed?.value || [];
+        const sel = $("rule-folder");
+        sel.innerHTML = "";
+        folders.forEach((f) => {
+          const opt = document.createElement("option");
+          opt.value = f.id;
+          opt.textContent = (f.displayName || "?") + " (" + String(f.id).slice(0, 12) + "…)";
+          sel.appendChild(opt);
+        });
+        if (!folders.length) {
+          sel.innerHTML = '<option value="">(empty)</option>';
+        }
+        $("rules-out").textContent = "Folders loaded: " + folders.length;
+      } catch (e) {
+        $("rules-out").textContent = e.message || String(e);
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    $("btn-create-rule").onclick = async () => {
+      $("rule-err").textContent = "";
+      if (!$("rule-confirm").checked) {
+        $("rule-err").textContent = "Поставьте confirm";
+        return;
+      }
+      setBusy(true);
+      try {
+        const r = await fetch("/api/rules/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            confirm: true,
+            displayName: $("rule-name").value,
+            senderContains: $("rule-sender").value,
+            moveToFolder: $("rule-folder").value,
+            sequence: Number($("rule-seq").value || 1),
+          }),
+        });
+        const j = await r.json();
+        if (!r.ok || j.ok === false) throw new Error(j.error || "create failed");
+        $("rules-out").textContent = j.raw_text || JSON.stringify(j.parsed, null, 2);
+      } catch (e) {
+        $("rule-err").textContent = e.message || String(e);
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    function addBubble(role, text, trace) {
+      const div = document.createElement("div");
+      div.className = "bubble " + (role === "user" ? "user" : "");
+      let html = esc(text);
+      if (trace && trace.length) {
+        html += '<div class="trace">';
+        trace.forEach((t) => {
+          html += esc(t.name) + " " + esc(JSON.stringify(t.args || {})) + "\n→ " + esc(t.preview || "") + "\n\n";
+        });
+        html += "</div>";
+      }
+      div.innerHTML = html;
+      $("thread").appendChild(div);
+      $("thread").scrollTop = $("thread").scrollHeight;
+    }
+
+    async function sendChat() {
+      $("chat-err").textContent = "";
+      const message = $("msg").value.trim();
+      if (!message) return;
+      addBubble("user", message);
+      history.push({ role: "user", content: message });
+      $("msg").value = "";
+      setBusy(true);
+      try {
+        const r = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, history: history.slice(0, -1) }),
+        });
+        const j = await r.json();
+        if (!r.ok || j.ok === false) throw new Error(j.error || "chat failed");
+        addBubble("assistant", j.reply || "", j.toolTrace);
+        history.push({ role: "assistant", content: j.reply || "" });
+      } catch (e) {
+        $("chat-err").textContent = e.message || String(e);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    $("btn-chat").onclick = sendChat;
+    $("btn-preset").onclick = () => {
+      $("msg").value = "Сделай сводку почты за день и сохрани в файл";
+      sendChat();
+    };
+
+    loadStatus();
+  </script>
+</body>
+</html>
