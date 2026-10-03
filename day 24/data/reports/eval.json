@@ -1,0 +1,225 @@
+{
+  "built_at": "2026-10-01T23:40:08.919Z",
+  "summary": {
+    "total": 10,
+    "all_ok": 10,
+    "has_sources": 10,
+    "has_quotes": 10,
+    "quotes_grounded": 10,
+    "answer_aligned": 10,
+    "refuse_ok": 10,
+    "refused": 2
+  },
+  "rows": [
+    {
+      "id": "q01",
+      "question": "Что такое «Год продуктивности» Криса Бэйли и зачем он проводил этот эксперимент?",
+      "expect": "Год личных экспериментов с методиками продуктивности на себе; проверка популярных советов на практике.",
+      "out_of_corpus": false,
+      "refuse": false,
+      "answer_preview": "«Год продуктивности» — это проект Криса Бэйли, в рамках которого он в течение года исследовал и тестировал различные методики личной продуктивности, читая книги, проводя интервью и проводя эксперименты на себе. Целью проекта было глубоко разобраться в проблеме продуктивности и по",
+      "sources_count": 3,
+      "quotes_count": 3,
+      "max_cosine": 0.7107483058052337,
+      "gate_passed": true,
+      "rewrite": "«Год продуктивности» Криса Бэйли, эксперимент по повышению продуктивности.",
+      "checks": {
+        "has_sources": true,
+        "has_quotes": true,
+        "quotes_grounded": true,
+        "answer_aligned": true,
+        "refuse_ok": true
+      },
+      "all_ok": true
+    },
+    {
+      "id": "q02",
+      "question": "Что автор пишет про «точку продуктивности» и на что в среднем уходят 24 часа суток?",
+      "expect": "Сутки = 24 часа; разбивка на работу, сон, дом, еду, заботу о других, досуг и пр.",
+      "out_of_corpus": false,
+      "refuse": false,
+      "answer_preview": "Автор описывает «точку продуктивности» как важный аспект, который позволяет достигать максимальных результатов, затрачивая меньше времени. В среднем, 24 часа суток распределяются следующим образом: 8,7 часа на работу, 7,7 часа на сон, 1,1 часа на обязанности по дому, 1,0 час на п",
+      "sources_count": 1,
+      "quotes_count": 1,
+      "max_cosine": 0.5486918529676644,
+      "gate_passed": true,
+      "rewrite": "Точка продуктивности, 24 часа суток.",
+      "checks": {
+        "has_sources": true,
+        "has_quotes": true,
+        "quotes_grounded": true,
+        "answer_aligned": true,
+        "refuse_ok": true
+      },
+      "all_ok": true
+    },
+    {
+      "id": "q03",
+      "question": "Как Бэйли переопределяет продуктивность (новое определение)?",
+      "expect": "Не «сделать больше любой ценой», а осмысленная эффективность / управление ресурсами (время, энергия, внимание).",
+      "out_of_corpus": false,
+      "refuse": false,
+      "answer_preview": "Бэйли переопределяет продуктивность как способность достигать результатов, при этом акцентируя внимание на необходимости организовать свою работу рациональнее и улучшить управление временем, вниманием и энергией. Продуктивность не сводится только к эффективности, а включает в себ",
+      "sources_count": 1,
+      "quotes_count": 2,
+      "max_cosine": 0.525115205540783,
+      "gate_passed": true,
+      "rewrite": "Переопределение продуктивности Бэйли.",
+      "checks": {
+        "has_sources": true,
+        "has_quotes": true,
+        "quotes_grounded": true,
+        "answer_aligned": true,
+        "refuse_ok": true
+      },
+      "all_ok": true
+    },
+    {
+      "id": "q04",
+      "question": "Какие три компонента продуктивности выделяет автор?",
+      "expect": "Время, энергия и внимание (формулировка книги).",
+      "out_of_corpus": false,
+      "refuse": false,
+      "answer_preview": "Автор выделяет три компонента продуктивности: управление временем, вниманием и энергией [2].",
+      "sources_count": 1,
+      "quotes_count": 1,
+      "max_cosine": 0.5431789518377683,
+      "gate_passed": true,
+      "rewrite": "Три компонента продуктивности автора.",
+      "checks": {
+        "has_sources": true,
+        "has_quotes": true,
+        "quotes_grounded": true,
+        "answer_aligned": true,
+        "refuse_ok": true
+      },
+      "all_ok": true
+    },
+    {
+      "id": "q05",
+      "question": "Зачем в эксперименте Бэйли фигурирует медитация?",
+      "expect": "Медитация как практика для фокуса / снижения автопилота / производительности ума.",
+      "out_of_corpus": false,
+      "refuse": false,
+      "answer_preview": "В эксперименте Бэйли медитация фигурирует как один из личных экспериментов с продуктивностью, который помог ему извлечь полезные уроки и понять, как медитация и продуктивность связаны между собой. Он также практиковал медитацию как способ замедлить темп своей жизни, хотя изначаль",
+      "sources_count": 3,
+      "quotes_count": 2,
+      "max_cosine": 0.43477353919553896,
+      "gate_passed": true,
+      "rewrite": "Медитация в эксперименте Бэйли.",
+      "checks": {
+        "has_sources": true,
+        "has_quotes": true,
+        "quotes_grounded": true,
+        "answer_aligned": true,
+        "refuse_ok": true
+      },
+      "all_ok": true
+    },
+    {
+      "id": "q06",
+      "question": "Что автор называет «работой на автопилоте» и чем это плохо?",
+      "expect": "Неосознанные привычные действия; ведёт к падению осознанной продуктивности.",
+      "out_of_corpus": false,
+      "refuse": false,
+      "answer_preview": "Автор называет «работой на автопилоте» состояние, когда человек выполняет задачи автоматически, не осознавая их важность и не задумываясь о более креативных и рациональных способах выполнения работы. Это плохо, потому что приводит к снижению продуктивности, уменьшению ясности мыш",
+      "sources_count": 3,
+      "quotes_count": 2,
+      "max_cosine": 0.5915589458224296,
+      "gate_passed": true,
+      "rewrite": "Работа на автопилоте, негативные последствия.",
+      "checks": {
+        "has_sources": true,
+        "has_quotes": true,
+        "quotes_grounded": true,
+        "answer_aligned": true,
+        "refuse_ok": true
+      },
+      "all_ok": true
+    },
+    {
+      "id": "q07",
+      "question": "В чём смысл сравнения «монаха» и «биржевого трейдера» в книге?",
+      "expect": "Контраст режимов энергии/стимуляции: спокойный vs перевозбуждённый стиль.",
+      "out_of_corpus": false,
+      "refuse": false,
+      "answer_preview": "Сравнение «монаха» и «биржевого трейдера» иллюстрирует разные подходы к работе и осознанности. Монах работает медленно и осознанно, что позволяет ему быть внимательным к своим действиям, но не дает серьезных результатов. Биржевой трейдер, напротив, работает быстро и автоматически",
+      "sources_count": 2,
+      "quotes_count": 2,
+      "max_cosine": 0.6211215511918509,
+      "gate_passed": true,
+      "rewrite": "Сравнение «монаха» и «биржевого трейдера» в книге.",
+      "checks": {
+        "has_sources": true,
+        "has_quotes": true,
+        "quotes_grounded": true,
+        "answer_aligned": true,
+        "refuse_ok": true
+      },
+      "all_ok": true
+    },
+    {
+      "id": "q08",
+      "question": "Кто автор книги «Мой продуктивный год»?",
+      "expect": "Крис Бэйли (Chris Bailey).",
+      "out_of_corpus": false,
+      "refuse": false,
+      "answer_preview": "Автором книги «Мой продуктивный год» является Крис Бэйли.",
+      "sources_count": 1,
+      "quotes_count": 1,
+      "max_cosine": 0.5881268096236457,
+      "gate_passed": true,
+      "rewrite": "Автор книги «Мой продуктивный год».",
+      "checks": {
+        "has_sources": true,
+        "has_quotes": true,
+        "quotes_grounded": true,
+        "answer_aligned": true,
+        "refuse_ok": true
+      },
+      "all_ok": true
+    },
+    {
+      "id": "q09",
+      "question": "Кому посвящена книга (посвящение)?",
+      "expect": "Волонтёрам и участникам программ Camp Quality.",
+      "out_of_corpus": false,
+      "refuse": true,
+      "answer_preview": "Не знаю по этой базе — уверенность слишком низкая. Уточните вопрос или укажите тему/раздел из книги.",
+      "sources_count": 0,
+      "quotes_count": 0,
+      "max_cosine": 0.37251429909695183,
+      "gate_passed": false,
+      "rewrite": "Посвящение книги.",
+      "checks": {
+        "has_sources": true,
+        "has_quotes": true,
+        "quotes_grounded": true,
+        "answer_aligned": true,
+        "refuse_ok": true
+      },
+      "all_ok": true
+    },
+    {
+      "id": "q10",
+      "question": "Какой был курс акций NVIDIA на закрытии торгов 15 марта 2026 года?",
+      "expect": "В базе книги этого нет. С RAG ответ должен отказаться / сказать что не в контексте. Без RAG модель может галлюцинировать число.",
+      "out_of_corpus": true,
+      "refuse": true,
+      "answer_preview": "Не знаю по этой базе — уверенность слишком низкая. Уточните вопрос или укажите тему/раздел из книги.",
+      "sources_count": 0,
+      "quotes_count": 0,
+      "max_cosine": 0.23229659667949298,
+      "gate_passed": false,
+      "rewrite": "Курс акций NVIDIA на закрытии торгов 15 марта 2026 года.",
+      "checks": {
+        "has_sources": true,
+        "has_quotes": true,
+        "quotes_grounded": true,
+        "answer_aligned": true,
+        "refuse_ok": true
+      },
+      "all_ok": true
+    }
+  ]
+}

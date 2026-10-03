@@ -1,0 +1,82 @@
+{
+  "built_at": "2026-10-02T22:52:22.503Z",
+  "doc_id": "Byeyili_K_Moyi_Produktivnyiyi_God_K-56655c18",
+  "fixed": {
+    "meta": {
+      "built_at": "2026-10-02T22:52:15.388Z",
+      "doc_id": "Byeyili_K_Moyi_Produktivnyiyi_God_K-56655c18",
+      "strategy": "fixed",
+      "chunk_count": 795,
+      "dims": 1536,
+      "model": "text-embedding-3-small",
+      "source": "Byeyili_K._Moyi_Produktivnyiyi_God_K.txt",
+      "source_abs": "/Users/dbondarev/Library/CloudStorage/OneDrive-Personal/dbondarev workspace/Books/Byeyili_K._Moyi_Produktivnyiyi_God_K.txt",
+      "title": "Мой продуктивный год: Как я проверил самые известные методики личной эффективности на себе",
+      "smoke": false,
+      "full_chars": 535742,
+      "indexed_chars": 535742
+    },
+    "stats": {
+      "chunk_count": 795,
+      "avg_len": 792,
+      "median_len": 795,
+      "p95_len": 799,
+      "too_short": 0,
+      "unique_sections": 190,
+      "total_chars": 629912,
+      "sections_sample": [
+        "body",
+        "Крис Бэйли",
+        "Дизайн обложки Ю. Буга",
+        "Посвящается всем волонтерам и участникам благотворительных программ Camp Quality",
+        "Введение",
+        "Точка продуктивности",
+        "Год продуктивности",
+        "За 365 дней:",
+        "Об этой книге",
+        "Новое определение продуктивности",
+        "Медитация на темы производительности",
+        "Работа на автопилоте"
+      ]
+    }
+  },
+  "structure": {
+    "meta": {
+      "built_at": "2026-10-02T22:52:22.186Z",
+      "doc_id": "Byeyili_K_Moyi_Produktivnyiyi_God_K-56655c18",
+      "strategy": "structure",
+      "chunk_count": 835,
+      "dims": 1536,
+      "model": "text-embedding-3-small",
+      "source": "Byeyili_K._Moyi_Produktivnyiyi_God_K.txt",
+      "source_abs": "/Users/dbondarev/Library/CloudStorage/OneDrive-Personal/dbondarev workspace/Books/Byeyili_K._Moyi_Produktivnyiyi_God_K.txt",
+      "title": "Мой продуктивный год: Как я проверил самые известные методики личной эффективности на себе",
+      "smoke": false,
+      "full_chars": 535742,
+      "indexed_chars": 535742
+    },
+    "stats": {
+      "chunk_count": 835,
+      "avg_len": 714,
+      "median_len": 794,
+      "p95_len": 799,
+      "too_short": 0,
+      "unique_sections": 198,
+      "total_chars": 596247,
+      "sections_sample": [
+        "preamble",
+        "Крис Бэйли",
+        "Дизайн обложки Ю. Буга",
+        "Посвящается всем волонтерам и участникам благотворительных программ Camp Quality",
+        "Введение",
+        "Точка продуктивности",
+        "Год продуктивности",
+        "Об этой книге",
+        "Новое определение продуктивности",
+        "Медитация на темы производительности",
+        "Работа на автопилоте",
+        "Монах и сидящий на кокаине биржевой трейдер"
+      ]
+    }
+  }
+}

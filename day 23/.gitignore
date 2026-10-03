@@ -1,0 +1,4 @@
+node_modules/
+.env
+data/reports/eval-runs/*
+!data/reports/eval-runs/.gitkeep

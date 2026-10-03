@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 21 — Document indexing</title>
+  <style>
+    :root {
+      --ink: #1a1a1a; --muted: #5c5c5c; --line: #d6d2cb; --accent: #1f4d3a;
+      --surface: #fffdf9; --warn: #8b1e1e; --active: #e8f0eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+    main { max-width: 980px; margin: 0 auto; padding: 1.4rem 1.1rem 2.5rem; }
+    h1 { margin: 0 0 0.25rem; font-size: 1.35rem; font-weight: 600; }
+    h2 { margin: 0 0 0.55rem; font-size: 1rem; font-weight: 600; }
+    .sub { margin: 0 0 1rem; color: var(--muted); font-size: 0.88rem; line-height: 1.45; }
+    .panel {
+      border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+      padding: 0.85rem; margin-bottom: 0.85rem;
+    }
+    .meta { font-size: 0.78rem; color: var(--muted); white-space: pre-wrap; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
+    button {
+      appearance: none; border: 0; border-radius: 6px; background: var(--accent);
+      color: #f7f7f5; font: inherit; font-weight: 500; padding: 0.45rem 0.8rem; cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button.danger { background: #6b2a2a; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    th, td { border-bottom: 1px solid var(--line); padding: 0.4rem 0.35rem; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; font-size: 0.75rem; }
+    .chunk {
+      border: 1px solid var(--line); border-radius: 8px; padding: 0.55rem 0.65rem;
+      margin-bottom: 0.45rem; font-size: 0.84rem; background: #faf8f4;
+    }
+    .chunk .id { font-weight: 600; color: var(--accent); font-size: 0.78rem; }
+    .err { color: var(--warn); font-size: 0.86rem; white-space: pre-wrap; margin-top: 0.4rem; }
+    input, select {
+      border: 1px solid var(--line); border-radius: 6px; font: inherit;
+      padding: 0.45rem 0.55rem; width: 100%; margin-bottom: 0.4rem;
+    }
+    label { display: block; font-size: 0.74rem; color: var(--muted); margin-bottom: 0.2rem; }
+    .row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .row > div { flex: 1 1 160px; }
+    .doc-row { cursor: pointer; }
+    .doc-row.active { background: var(--active); }
+    .doc-row:hover { background: #f3f1ec; }
+    .badge {
+      display: inline-block; font-size: 0.68rem; padding: 0.1rem 0.35rem;
+      border-radius: 4px; border: 1px solid var(--line); margin-left: 0.25rem;
+    }
+    .badge.on { color: var(--accent); border-color: var(--accent); }
+    #browse-list { max-height: 12rem; overflow: auto; font-size: 0.82rem; }
+    .browse-item {
+      padding: 0.35rem 0.4rem; border-bottom: 1px solid var(--line); cursor: pointer;
+    }
+    .browse-item:hover { background: #f3f1ec; }
+    .browse-item.selected { background: var(--active); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 21 — Document indexing</h1>
+    <p class="sub">
+      Выберите документ → Build (fixed + structure + embeddings) → поиск по активному документу.
+      В базе — список уже проиндексированных, переключение между ними.
+    </p>
+
+    <div class="panel">
+      <div class="meta" id="status">…</div>
+      <div class="err" id="err"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Документы в базе</h2>
+      <div id="docs-table">Пока пусто — проиндексируйте документ.</div>
+      <div class="actions">
+        <button type="button" class="secondary" id="btn-refresh">Refresh</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Выбрать / добавить документ</h2>
+      <div class="row">
+        <div style="flex:0 0 140px">
+          <label>Каталог</label>
+          <select id="browse-root">
+            <option value="books">Books/</option>
+            <option value="inbox">data/inbox/</option>
+          </select>
+        </div>
+        <div>
+          <label>Или абсолютный путь к .txt / .md</label>
+          <input id="path" placeholder="/path/to/file.txt">
+        </div>
+      </div>
+      <div id="browse-list"></div>
+      <div class="row" style="margin-top:0.5rem">
+        <div>
+          <label>Загрузить файл в inbox</label>
+          <input id="file" type="file" accept=".txt,.md,.text,.markdown,text/plain">
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" class="secondary" id="btn-browse">Обновить список</button>
+        <button type="button" id="btn-build">Build indexes</button>
+        <button type="button" class="secondary" id="btn-smoke">Build smoke</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Сравнение стратегий (активный документ)</h2>
+      <div id="compare">Нет данных.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Sample chunks</h2>
+      <div id="samples"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Search (активный документ)</h2>
+      <div class="row">
+        <div>
+          <label>Query</label>
+          <input id="q" placeholder="медитация и фокус">
+        </div>
+        <div style="flex:0 0 140px">
+          <label>Strategy</label>
+          <select id="strategy">
+            <option value="structure">structure</option>
+            <option value="fixed">fixed</option>
+          </select>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" id="btn-search">Search top-5</button>
+      </div>
+      <div id="hits" style="margin-top:0.6rem"></div>
+    </div>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let busy = false;
+    let selectedBrowsePath = "";
+    let state = { active_id: null, docs: [] };
+
+    function setBusy(v) {
+      busy = v;
+      document.querySelectorAll("button").forEach((b) => { b.disabled = v; });
+    }
+
+    function esc(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    function resolvePath() {
+      return ($("path").value || selectedBrowsePath || "").trim();
+    }
+
+    async function loadStatus() {
+      $("err").textContent = "";
+      const r = await fetch("/api/status");
+      const j = await r.json();
+      state.active_id = j.active_id;
+      state.docs = j.docs || [];
+      const active = j.active;
+      $("status").textContent =
+        "port " + j.port +
+        " | openai: " + (j.has_openai ? "yes" : "NO") +
+        " | model: " + j.embedding_model +
+        " | building: " + j.building +
+        "\nactive: " + (active ? active.title + " [" + active.id + "]" : "(none)") +
+        (active ? "\n" + active.path : "");
+
+      renderDocs(state.docs, state.active_id);
+      renderSamples(j.indexes);
+      try {
+        const cr = await fetch("/api/compare");
+        const cj = await cr.json();
+        if (cj.ok) renderCompare(cj);
+        else $("compare").textContent = cj.error || "no compare";
+      } catch {
+        $("compare").textContent = "no compare yet";
+      }
+    }
+
+    function renderDocs(docs, activeId) {
+      if (!docs.length) {
+        $("docs-table").innerHTML = "<div class='meta'>Пока пусто.</div>";
+        return;
+      }
+      let html = "<table><thead><tr><th></th><th>Title</th><th>Chunks</th><th>Built</th><th></th></tr></thead><tbody>";
+      docs.forEach((d) => {
+        const active = d.id === activeId;
+        const counts = d.chunk_counts || {};
+        html +=
+          "<tr class='doc-row" + (active ? " active" : "") + "' data-id='" + esc(d.id) + "'>" +
+          "<td>" + (active ? "<span class='badge on'>active</span>" : "") + "</td>" +
+          "<td><strong>" + esc(d.title || d.source) + "</strong><div class='meta'>" +
+          esc(d.source) + "<br>" + esc(d.id) + "</div></td>" +
+          "<td>f:" + (counts.fixed ?? "?") + " / s:" + (counts.structure ?? "?") + "</td>" +
+          "<td class='meta'>" + esc((d.built_at || "").slice(0, 19)) +
+          (d.smoke ? " · smoke" : "") + "</td>" +
+          "<td><button type='button' class='secondary btn-del' data-id='" + esc(d.id) + "'>Удалить</button></td>" +
+          "</tr>";
+      });
+      html += "</tbody></table>";
+      $("docs-table").innerHTML = html;
+
+      $("docs-table").querySelectorAll("tr.doc-row").forEach((tr) => {
+        tr.addEventListener("click", async (e) => {
+          if (e.target.closest(".btn-del")) return;
+          await selectDoc(tr.getAttribute("data-id"));
+        });
+      });
+      $("docs-table").querySelectorAll(".btn-del").forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          if (!confirm("Удалить индекс документа?")) return;
+          setBusy(true);
+          try {
+            const r = await fetch("/api/docs/" + encodeURIComponent(btn.getAttribute("data-id")), { method: "DELETE" });
+            const j = await r.json();
+            if (!j.ok) throw new Error(j.error || "delete failed");
+            await loadStatus();
+          } catch (err) {
+            $("err").textContent = err.message || String(err);
+          } finally {
+            setBusy(false);
+          }
+        });
+      });
+    }
+
+    async function selectDoc(id) {
+      setBusy(true);
+      $("err").textContent = "";
+      try {
+        const r = await fetch("/api/docs/select", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || "select failed");
+        await loadStatus();
+      } catch (e) {
+        $("err").textContent = e.message || String(e);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function renderSamples(indexes) {
+      const strategies = indexes?.strategies || {};
+      let samplesHtml = "";
+      for (const s of ["fixed", "structure"]) {
+        const samples = strategies[s]?.sample || [];
+        samplesHtml += "<h3 style='font-size:0.9rem;margin:0.6rem 0 0.35rem'>" + s + "</h3>";
+        if (!samples.length) {
+          samplesHtml += "<div class='meta'>(нет)</div>";
+          continue;
+        }
+        for (const c of samples) {
+          samplesHtml +=
+            "<div class='chunk'><div class='id'>" + esc(c.chunk_id) +
+            " · section: " + esc(c.section) +
+            " · embedding: " + (c.has_embedding ? "yes" : "no") +
+            "</div>" + esc(c.text_preview) + "</div>";
+        }
+      }
+      $("samples").innerHTML = samplesHtml;
+    }
+
+    function renderCompare(cj) {
+      const a = cj.fixed?.stats || {};
+      const b = cj.structure?.stats || {};
+      $("compare").innerHTML =
+        "<div class='meta' style='margin-bottom:0.4rem'>doc: " + esc(cj.doc_id || "") + "</div>" +
+        "<table><thead><tr><th>Metric</th><th>fixed</th><th>structure</th></tr></thead><tbody>" +
+        row("chunk_count", a.chunk_count, b.chunk_count) +
+        row("avg_len", a.avg_len, b.avg_len) +
+        row("median_len", a.median_len, b.median_len) +
+        row("p95_len", a.p95_len, b.p95_len) +
+        row("too_short", a.too_short, b.too_short) +
+        row("unique_sections", a.unique_sections, b.unique_sections) +
+        row("total_chars", a.total_chars, b.total_chars) +
+        "</tbody></table>";
+    }
+
+    function row(name, x, y) {
+      return "<tr><td>" + name + "</td><td>" + x + "</td><td>" + y + "</td></tr>";
+    }
+
+    async function loadBrowse() {
+      const root = $("browse-root").value;
+      const r = await fetch("/api/browse?root=" + encodeURIComponent(root));
+      const j = await r.json();
+      let html = "";
+      (j.files || []).forEach((f) => {
+        html +=
+          "<div class='browse-item' data-path='" + esc(f.path) + "'>" +
+          esc(f.name) + " <span class='meta'>(" + Math.round(f.bytes / 1024) + " KB)</span></div>";
+      });
+      $("browse-list").innerHTML = html || "<div class='meta'>Нет .txt/.md файлов</div>";
+      $("browse-list").querySelectorAll(".browse-item").forEach((el) => {
+        el.addEventListener("click", () => {
+          $("browse-list").querySelectorAll(".browse-item").forEach((x) => x.classList.remove("selected"));
+          el.classList.add("selected");
+          selectedBrowsePath = el.getAttribute("data-path");
+          $("path").value = selectedBrowsePath;
+        });
+      });
+    }
+
+    async function runBuild(smoke) {
+      $("err").textContent = "";
+      const path = resolvePath();
+      if (!path) {
+        $("err").textContent = "Выберите файл из списка или укажите путь";
+        return;
+      }
+      setBusy(true);
+      try {
+        const r = await fetch("/api/build", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ smoke, path }),
+        });
+        const j = await r.json();
+        if (!r.ok || j.ok === false) throw new Error(j.error || "build failed");
+        await loadStatus();
+      } catch (e) {
+        $("err").textContent = e.message || String(e);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    $("btn-build").onclick = () => runBuild(false);
+    $("btn-smoke").onclick = () => runBuild(true);
+    $("btn-refresh").onclick = () => loadStatus();
+    $("btn-browse").onclick = () => loadBrowse();
+    $("browse-root").onchange = () => loadBrowse();
+
+    $("file").onchange = async () => {
+      const file = $("file").files?.[0];
+      if (!file) return;
+      $("err").textContent = "";
+      setBusy(true);
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const r = await fetch("/api/upload", { method: "POST", body: fd });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || "upload failed");
+        $("path").value = j.path;
+        selectedBrowsePath = j.path;
+        $("browse-root").value = "inbox";
+        await loadBrowse();
+      } catch (e) {
+        $("err").textContent = e.message || String(e);
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    $("btn-search").onclick = async () => {
+      $("err").textContent = "";
+      setBusy(true);
+      try {
+        const r = await fetch("/api/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: $("q").value,
+            strategy: $("strategy").value,
+            topK: 5,
+            docId: state.active_id || undefined,
+          }),
+        });
+        const j = await r.json();
+        if (!r.ok || j.ok === false) throw new Error(j.error || "search failed");
+        let html = "<div class='meta'>doc: " + esc(j.doc_id) + "</div>";
+        (j.results || []).forEach((h, i) => {
+          html +=
+            "<div class='chunk'><div class='id'>#" + (i + 1) +
+            " score=" + h.score.toFixed(4) +
+            " · " + esc(h.chunk_id) +
+            " · " + esc(h.section) +
+            "</div>" + esc(h.text_preview) + "</div>";
+        });
+        $("hits").innerHTML = html || "<div class='meta'>empty</div>";
+      } catch (e) {
+        $("err").textContent = e.message || String(e);
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    loadStatus();
+    loadBrowse();
+  </script>
+</body>
+</html>

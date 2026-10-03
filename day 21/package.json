@@ -1,0 +1,23 @@
+{
+  "name": "ai-challenge-day-21",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Day 21 - Document indexing with two chunking strategies",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/app.js",
+    "ui": "node src/app.js",
+    "build": "node src/build.js",
+    "compare": "node src/compare.js",
+    "smoke": "node src/build.js --smoke"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "multer": "^2.4.0",
+    "openai": "^4.77.0"
+  }
+}

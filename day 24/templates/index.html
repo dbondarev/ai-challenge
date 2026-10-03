@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 24 — Grounded RAG</title>
+  <style>
+    :root {
+      --ink: #1a1a1a; --muted: #5c5c5c; --line: #d6d2cb; --accent: #1f4d3a;
+      --surface: #fffdf9; --warn: #8b1e1e; --ok: #1f4d3a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+    main { max-width: 960px; margin: 0 auto; padding: 1.4rem 1.1rem 2.5rem; }
+    h1 { margin: 0 0 0.25rem; font-size: 1.35rem; font-weight: 600; }
+    h2 { margin: 0 0 0.55rem; font-size: 1rem; font-weight: 600; }
+    .sub { margin: 0 0 1rem; color: var(--muted); font-size: 0.88rem; line-height: 1.45; }
+    .panel {
+      border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+      padding: 0.85rem; margin-bottom: 0.85rem;
+    }
+    .meta { font-size: 0.78rem; color: var(--muted); white-space: pre-wrap; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
+    button {
+      appearance: none; border: 0; border-radius: 6px; background: var(--accent);
+      color: #f7f7f5; font: inherit; font-weight: 500; padding: 0.45rem 0.8rem; cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    textarea {
+      width: 100%; border: 1px solid var(--line); border-radius: 6px;
+      font: inherit; padding: 0.5rem 0.6rem; margin-bottom: 0.4rem;
+      min-height: 4rem; resize: vertical;
+    }
+    label { display: block; font-size: 0.74rem; color: var(--muted); margin-bottom: 0.2rem; }
+    .err { color: var(--warn); font-size: 0.86rem; white-space: pre-wrap; margin-top: 0.4rem; }
+    .ans {
+      border: 1px solid var(--line); border-radius: 8px; padding: 0.65rem;
+      background: #faf8f4; font-size: 0.88rem; white-space: pre-wrap; line-height: 1.45;
+      min-height: 4rem;
+    }
+    .badge {
+      display: inline-block; font-size: 0.72rem; font-weight: 600;
+      padding: 0.15rem 0.45rem; border-radius: 4px; margin-bottom: 0.4rem;
+    }
+    .badge.ok { background: #dceee4; color: var(--ok); }
+    .badge.refuse { background: #f3d6d6; color: var(--warn); }
+    .block {
+      margin-top: 0.55rem; padding: 0.5rem; border-radius: 6px;
+      background: #1f2421; color: #e8ebe6; font-size: 0.74rem;
+      font-family: ui-monospace, monospace; white-space: pre-wrap; max-height: 12rem; overflow: auto;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    th, td { border-bottom: 1px solid var(--line); padding: 0.4rem 0.3rem; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 0.72rem; }
+    .ok { color: var(--ok); }
+    .bad { color: var(--warn); }
+    .qlist { font-size: 0.84rem; max-height: 14rem; overflow: auto; }
+    .qitem { padding: 0.4rem 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+    .qitem:hover { background: #f3f1ec; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 24 — Citations &amp; anti-hallucination</h1>
+    <p class="sub">
+      Answer + sources + quotes. При max cosine &lt; KNOW_MIN_SCORE — «не знаю».
+      Pipeline Day 23 (rewrite → filter → rerank), индекс Day 21.
+    </p>
+
+    <div class="panel">
+      <div class="meta" id="status">…</div>
+      <div class="err" id="err"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Вопрос</h2>
+      <label for="q">Текст</label>
+      <textarea id="q" placeholder="Какие три компонента продуктивности выделяет автор?"></textarea>
+      <div class="actions">
+        <button type="button" id="btn-ask">Спросить</button>
+      </div>
+      <div style="margin-top:0.7rem">
+        <div id="badge"></div>
+        <div class="ans" id="answer">…</div>
+        <h2 style="margin-top:0.7rem">Sources</h2>
+        <div class="block" id="sources">—</div>
+        <h2 style="margin-top:0.7rem">Quotes</h2>
+        <div class="block" id="quotes">—</div>
+        <h2 style="margin-top:0.7rem">Pipeline</h2>
+        <div class="meta" id="pipe">—</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Eval (Day 22, 10 вопросов)</h2>
+      <div class="qlist" id="qlist"></div>
+      <div class="actions">
+        <button type="button" id="btn-eval">Прогнать набор</button>
+        <button type="button" class="secondary" id="btn-eval-smoke">Smoke (2)</button>
+      </div>
+      <div id="eval-out" style="margin-top:0.6rem"></div>
+    </div>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function setBusy(v) {
+      document.querySelectorAll("button").forEach((b) => { b.disabled = v; });
+    }
+
+    function esc(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    async function loadStatus() {
+      $("err").textContent = "";
+      const r = await fetch("/api/status");
+      const j = await r.json();
+      if (!j.ok) {
+        $("status").textContent = "ERROR: " + (j.error || "status failed");
+        return;
+      }
+      const active = j.active;
+      const ix = j.indexes?.strategies || {};
+      $("status").textContent =
+        "port " + j.port +
+        " | openai: " + (j.has_openai ? "yes (" + j.model + ")" : "NO") +
+        " | KNOW_MIN=" + j.know_min_score +
+        " K_PRE=" + j.k_pre + " K_POST=" + j.k_post +
+        " thr=" + j.sim_threshold +
+        "\nactive: " + (active ? active.title : "(none)") +
+        (active ? " [" + active.id + "]" : "") +
+        "\nstructure: " + (ix.structure?.exists ? "yes/" + ix.structure.meta?.chunk_count : "no");
+    }
+
+    async function loadEvalSet() {
+      const r = await fetch("/api/eval/set");
+      const j = await r.json();
+      let html = "";
+      (j.questions || []).forEach((q) => {
+        html +=
+          "<div class='qitem' data-q='" + esc(q.question) + "'>" +
+          "<strong>" + esc(q.id) + "</strong> — " + esc(q.question) +
+          "</div>";
+      });
+      $("qlist").innerHTML = html;
+      $("qlist").querySelectorAll(".qitem").forEach((el) => {
+        el.addEventListener("click", () => { $("q").value = el.getAttribute("data-q"); });
+      });
+    }
+
+    function renderAsk(j) {
+      $("badge").innerHTML = j.refuse
+        ? "<span class='badge refuse'>REFUSE / не знаю</span>"
+        : "<span class='badge ok'>GROUNDED</span>";
+      $("answer").textContent = j.answer || "(empty)";
+      const src = j.sources || [];
+      $("sources").textContent = src.length
+        ? src.map((s) =>
+            "[" + s.n + "] " + (s.section || "?") +
+            " | " + (s.chunk_id || "") +
+            " | cos=" + (s.score != null ? Number(s.score).toFixed(3) : "—") +
+            "\nsource: " + (s.source || "")
+          ).join("\n\n")
+        : "(none)";
+      const qs = j.quotes || [];
+      $("quotes").textContent = qs.length
+        ? qs.map((q) => "[" + q.n + "] «" + q.text + "»").join("\n\n")
+        : "(none)";
+      const m = j.retrieval_meta || {};
+      $("pipe").textContent =
+        "rewrite: " + (m.rewrite || "—") +
+        "\nmax_cosine=" + (m.max_cosine != null ? Number(m.max_cosine).toFixed(3) : "—") +
+        " know_min=" + m.know_min_score +
+        " gate=" + (m.gate_passed ? "pass" : "refuse") +
+        "\nK_pre=" + m.k_pre + " after_filter=" + m.post_filter_count +
+        " K_post=" + m.k_post +
+        (m.fallback ? " fallback=yes" : "") +
+        "\nvalidation: " + JSON.stringify(j.validation || {});
+    }
+
+    async function ask() {
+      $("err").textContent = "";
+      const question = $("q").value.trim();
+      if (!question) { $("err").textContent = "Введите вопрос"; return; }
+      setBusy(true);
+      try {
+        const r = await fetch("/api/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question }),
+        });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || "ask failed");
+        renderAsk(j);
+      } catch (e) {
+        $("err").textContent = e.message || String(e);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function yn(v) { return v ? "<span class='ok'>ok</span>" : "<span class='bad'>fail</span>"; }
+
+    function renderEval(j) {
+      const s = j.summary || {};
+      let html =
+        "<p class='meta'>all_ok " + s.all_ok + "/" + s.total +
+        " · sources " + s.has_sources +
+        " · quotes " + s.has_quotes +
+        " · aligned " + s.answer_aligned +
+        " · refused " + s.refused + "</p>" +
+        "<table><thead><tr><th>id</th><th>refuse</th><th>src</th><th>qt</th><th>align</th><th>all</th></tr></thead><tbody>";
+      (j.rows || []).forEach((row) => {
+        const c = row.checks || {};
+        html +=
+          "<tr><td>" + esc(row.id) + "</td>" +
+          "<td>" + (row.refuse ? "yes" : "no") + "</td>" +
+          "<td>" + yn(c.has_sources) + "</td>" +
+          "<td>" + yn(c.has_quotes) + "</td>" +
+          "<td>" + yn(c.answer_aligned) + "</td>" +
+          "<td>" + yn(row.all_ok) + "</td></tr>";
+      });
+      html += "</tbody></table>";
+      $("eval-out").innerHTML = html;
+    }
+
+    async function runEval(limit) {
+      $("err").textContent = "";
+      setBusy(true);
+      try {
+        const r = await fetch("/api/eval/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(limit != null ? { limit } : {}),
+        });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || "eval failed");
+        renderEval(j);
+      } catch (e) {
+        $("err").textContent = e.message || String(e);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    $("btn-ask").addEventListener("click", ask);
+    $("btn-eval").addEventListener("click", () => runEval());
+    $("btn-eval-smoke").addEventListener("click", () => runEval(2));
+    loadStatus();
+    loadEvalSet();
+  </script>
+</body>
+</html>

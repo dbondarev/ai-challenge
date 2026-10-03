@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 25 — RAG chat + memory</title>
+  <style>
+    :root {
+      --ink: #1a1a1a; --muted: #5c5c5c; --line: #d6d2cb; --accent: #1f4d3a;
+      --surface: #fffdf9; --warn: #8b1e1e; --user: #e8f0ec; --bot: #f4f1ea;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+    main {
+      max-width: 1100px; margin: 0 auto; padding: 1.2rem 1rem 2rem;
+      display: grid; grid-template-columns: 1.4fr 0.9fr; gap: 0.85rem;
+    }
+    @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+    h1 { margin: 0 0 0.2rem; font-size: 1.25rem; font-weight: 600; grid-column: 1 / -1; }
+    .sub { margin: 0 0 0.8rem; color: var(--muted); font-size: 0.86rem; grid-column: 1 / -1; }
+    .panel {
+      border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+      padding: 0.75rem; display: flex; flex-direction: column; min-height: 70vh;
+    }
+    .meta { font-size: 0.75rem; color: var(--muted); white-space: pre-wrap; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.4rem 0; }
+    button {
+      appearance: none; border: 0; border-radius: 6px; background: var(--accent);
+      color: #f7f7f5; font: inherit; font-weight: 500; padding: 0.4rem 0.75rem; cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #log {
+      flex: 1; overflow: auto; border: 1px solid var(--line); border-radius: 8px;
+      padding: 0.5rem; background: #faf8f4;
+    }
+    .msg { margin: 0.45rem 0; padding: 0.55rem 0.65rem; border-radius: 8px; font-size: 0.88rem; line-height: 1.45; white-space: pre-wrap; }
+    .msg.user { background: var(--user); }
+    .msg.bot { background: var(--bot); }
+    .msg .who { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: var(--muted); margin-bottom: 0.25rem; }
+    .src {
+      margin-top: 0.4rem; padding: 0.4rem; border-radius: 6px;
+      background: #1f2421; color: #e8ebe6; font-size: 0.7rem;
+      font-family: ui-monospace, monospace; white-space: pre-wrap;
+    }
+    .badge { display: inline-block; font-size: 0.68rem; padding: 0.1rem 0.35rem; border-radius: 4px; background: #f3d6d6; color: var(--warn); }
+    textarea {
+      width: 100%; border: 1px solid var(--line); border-radius: 6px;
+      font: inherit; padding: 0.5rem; min-height: 3.2rem; resize: vertical; margin-top: 0.45rem;
+    }
+    .err { color: var(--warn); font-size: 0.84rem; margin-top: 0.35rem; white-space: pre-wrap; }
+    h2 { margin: 0 0 0.45rem; font-size: 0.95rem; }
+    .mem-block {
+      font-size: 0.82rem; line-height: 1.4; padding: 0.45rem; border-radius: 6px;
+      background: #f3f1ec; margin-bottom: 0.45rem; white-space: pre-wrap;
+    }
+    ul { margin: 0.2rem 0 0.5rem 1.1rem; padding: 0; font-size: 0.82rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 25 — Mini-chat RAG + task memory</h1>
+    <p class="sub">История · RAG на каждый ход · источники · память задачи (goal / constraints / terms)</p>
+
+    <div class="panel">
+      <div class="meta" id="status">…</div>
+      <div class="actions">
+        <button type="button" class="secondary" id="btn-new">New session</button>
+        <button type="button" class="secondary" id="btn-scenario">Run scenarios</button>
+      </div>
+      <div id="log"></div>
+      <textarea id="input" placeholder="Сообщение…"></textarea>
+      <div class="actions">
+        <button type="button" id="btn-send">Отправить</button>
+      </div>
+      <div class="err" id="err"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Task memory</h2>
+      <div class="meta" id="sid"></div>
+      <div class="mem-block" id="goal">goal: —</div>
+      <strong style="font-size:0.78rem;color:var(--muted)">Clarifications</strong>
+      <ul id="clar"></ul>
+      <strong style="font-size:0.78rem;color:var(--muted)">Constraints</strong>
+      <ul id="cons"></ul>
+      <strong style="font-size:0.78rem;color:var(--muted)">Terms</strong>
+      <div class="mem-block" id="terms">—</div>
+      <h2 style="margin-top:0.6rem">Scenario result</h2>
+      <div class="meta" id="sc-out">—</div>
+    </div>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let sessionId = null;
+    let busy = false;
+
+    function setBusy(v) {
+      busy = v;
+      document.querySelectorAll("button").forEach((b) => { b.disabled = v; });
+    }
+
+    function esc(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    function renderMemory(ts) {
+      const t = ts || {};
+      $("goal").textContent = "goal: " + (t.goal || "—");
+      $("clar").innerHTML = (t.clarifications || []).map((x) => "<li>" + esc(x) + "</li>").join("") || "<li>—</li>";
+      $("cons").innerHTML = (t.constraints || []).map((x) => "<li>" + esc(x) + "</li>").join("") || "<li>—</li>";
+      const terms = t.terms || {};
+      const keys = Object.keys(terms);
+      $("terms").textContent = keys.length
+        ? keys.map((k) => k + " = " + terms[k]).join("\n")
+        : "—";
+    }
+
+    function appendUser(text) {
+      const el = document.createElement("div");
+      el.className = "msg user";
+      el.innerHTML = "<div class='who'>You</div>" + esc(text);
+      $("log").appendChild(el);
+      $("log").scrollTop = $("log").scrollHeight;
+    }
+
+    function appendBot(r) {
+      const el = document.createElement("div");
+      el.className = "msg bot";
+      let html = "<div class='who'>Assistant" + (r.refuse ? " <span class='badge'>REFUSE</span>" : "") + "</div>";
+      html += esc(r.reply || r.answer || "");
+      const src = r.sources || [];
+      if (src.length) {
+        html += "<div class='src'>" + src.map((s) =>
+          "[" + s.n + "] " + esc(s.section || "?") + " · " + esc(s.chunk_id || "")
+        ).join("\n") + "</div>";
+      } else if (!r.refuse) {
+        html += "<div class='src'>(no sources)</div>";
+      }
+      const qs = r.quotes || [];
+      if (qs.length) {
+        html += "<div class='src' style='margin-top:0.3rem;opacity:0.9'>" +
+          qs.map((q) => "«" + esc((q.text || "").slice(0, 180)) + "»").join("\n") +
+          "</div>";
+      }
+      el.innerHTML = html;
+      $("log").appendChild(el);
+      $("log").scrollTop = $("log").scrollHeight;
+    }
+
+    async function loadStatus() {
+      const r = await fetch("/api/status");
+      const j = await r.json();
+      if (!j.ok) { $("status").textContent = j.error; return; }
+      $("status").textContent =
+        "port " + j.port + " | " + (j.has_openai ? j.model : "NO KEY") +
+        " | KNOW=" + j.know_min_score +
+        "\nactive: " + (j.active ? j.active.title : "(none)");
+    }
+
+    async function newSession() {
+      $("err").textContent = "";
+      $("log").innerHTML = "";
+      const r = await fetch("/api/session", { method: "POST" });
+      const j = await r.json();
+      sessionId = j.session_id;
+      $("sid").textContent = "session: " + sessionId;
+      renderMemory(j.task_state);
+    }
+
+    async function send() {
+      $("err").textContent = "";
+      const message = $("input").value.trim();
+      if (!message) return;
+      if (!sessionId) await newSession();
+      $("input").value = "";
+      appendUser(message);
+      setBusy(true);
+      try {
+        const r = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId, message }),
+        });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || "chat failed");
+        sessionId = j.session_id;
+        $("sid").textContent = "session: " + sessionId;
+        appendBot(j);
+        renderMemory(j.task_state);
+      } catch (e) {
+        $("err").textContent = e.message || String(e);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function runScenarios() {
+      $("err").textContent = "";
+      $("sc-out").textContent = "running…";
+      setBusy(true);
+      try {
+        const r = await fetch("/api/scenario/run", { method: "POST" });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || "scenario failed");
+        $("sc-out").textContent =
+          "passed " + j.summary.passed + "/" + j.summary.scenarios + "\n" +
+          (j.results || []).map((x) =>
+            x.id + ": " + (x.checks.passed ? "OK" : "FAIL") +
+            " sources=" + x.checks.all_sources_ok +
+            " goal_held=" + x.checks.goal_held_last3
+          ).join("\n");
+      } catch (e) {
+        $("err").textContent = e.message || String(e);
+        $("sc-out").textContent = "error";
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    $("btn-new").addEventListener("click", () => newSession());
+    $("btn-send").addEventListener("click", send);
+    $("btn-scenario").addEventListener("click", runScenarios);
+    $("input").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+    });
+
+    loadStatus();
+    newSession();
+  </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+node_modules/
+.env
+data/sessions/*
+!data/sessions/.gitkeep
+data/reports/*
+!data/reports/.gitkeep

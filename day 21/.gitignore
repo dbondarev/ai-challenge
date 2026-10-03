@@ -1,0 +1,6 @@
+node_modules/
+.env
+data/index/**/*.json
+!data/index/.gitkeep
+data/inbox/*
+!data/inbox/.gitkeep

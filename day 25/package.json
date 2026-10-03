@@ -1,0 +1,19 @@
+{
+  "name": "ai-challenge-day-25",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Day 25 - mini-chat RAG + task memory",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/app.js",
+    "ui": "node src/app.js",
+    "chat": "node src/cli.js",
+    "scenario": "node src/scenario_run.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "openai": "^4.77.0"
+  }
+}

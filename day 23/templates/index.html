@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 23 — Rerank &amp; filter</title>
+  <style>
+    :root {
+      --ink: #1a1a1a; --muted: #5c5c5c; --line: #d6d2cb; --accent: #1f4d3a;
+      --surface: #fffdf9; --warn: #8b1e1e; --base: #1f4d6b; --enh: #5a2d6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+    main { max-width: 1080px; margin: 0 auto; padding: 1.4rem 1.1rem 2.5rem; }
+    h1 { margin: 0 0 0.25rem; font-size: 1.35rem; font-weight: 600; }
+    h2 { margin: 0 0 0.55rem; font-size: 1rem; font-weight: 600; }
+    .sub { margin: 0 0 1rem; color: var(--muted); font-size: 0.88rem; line-height: 1.45; }
+    .panel {
+      border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+      padding: 0.85rem; margin-bottom: 0.85rem;
+    }
+    .meta { font-size: 0.78rem; color: var(--muted); white-space: pre-wrap; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
+    button {
+      appearance: none; border: 0; border-radius: 6px; background: var(--accent);
+      color: #f7f7f5; font: inherit; font-weight: 500; padding: 0.45rem 0.8rem; cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    textarea {
+      width: 100%; border: 1px solid var(--line); border-radius: 6px;
+      font: inherit; padding: 0.5rem 0.6rem; margin-bottom: 0.4rem;
+      min-height: 4rem; resize: vertical;
+    }
+    label { display: block; font-size: 0.74rem; color: var(--muted); margin-bottom: 0.2rem; }
+    .err { color: var(--warn); font-size: 0.86rem; white-space: pre-wrap; margin-top: 0.4rem; }
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+    @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+    .ans {
+      border: 1px solid var(--line); border-radius: 8px; padding: 0.65rem;
+      background: #faf8f4; font-size: 0.88rem; white-space: pre-wrap; line-height: 1.45;
+      min-height: 6rem;
+    }
+    .ans .who { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.35rem; }
+    .ans.base .who { color: var(--base); }
+    .ans.enh .who { color: var(--enh); }
+    .src, .pipe {
+      margin-top: 0.45rem; padding: 0.45rem; border-radius: 6px;
+      background: #1f2421; color: #e8ebe6; font-size: 0.72rem;
+      font-family: ui-monospace, monospace; white-space: pre-wrap; max-height: 12rem; overflow: auto;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    th, td { border-bottom: 1px solid var(--line); padding: 0.4rem 0.3rem; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 0.72rem; }
+    .ok { color: var(--accent); }
+    .bad { color: var(--warn); }
+    .qlist { font-size: 0.84rem; max-height: 14rem; overflow: auto; }
+    .qitem { padding: 0.4rem 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+    .qitem:hover { background: #f3f1ec; }
+    .scores { margin-top: 0.5rem; font-size: 0.78rem; overflow: auto; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 23 — Reranking and filtering</h1>
+    <p class="sub">
+      Baseline (как Day 22) vs Enhanced: rewrite → K_pre → порог similarity → LLM rerank → K_post.
+      Индекс из Day 21, вопросы eval из Day 22.
+    </p>
+
+    <div class="panel">
+      <div class="meta" id="status">…</div>
+      <div class="err" id="err"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Вопрос</h2>
+      <label for="q">Текст</label>
+      <textarea id="q" placeholder="Какие три компонента продуктивности выделяет автор?"></textarea>
+      <div class="actions">
+        <button type="button" id="btn-both">Оба</button>
+        <button type="button" class="secondary" id="btn-base">Baseline</button>
+        <button type="button" class="secondary" id="btn-enh">Enhanced</button>
+      </div>
+      <div class="cols" style="margin-top:0.7rem">
+        <div class="ans base" id="ans-base">
+          <div class="who">Baseline</div>
+          <div class="body meta">…</div>
+          <div class="src" id="src-base" style="display:none"></div>
+        </div>
+        <div class="ans enh" id="ans-enh">
+          <div class="who">Enhanced</div>
+          <div class="body meta">…</div>
+          <div class="src" id="src-enh" style="display:none"></div>
+        </div>
+      </div>
+      <div class="panel" style="margin:0.7rem 0 0; padding:0.65rem" id="pipe-panel">
+        <h2>Pipeline (enhanced)</h2>
+        <div class="pipe" id="pipe">—</div>
+        <div class="scores" id="scores"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Контрольные вопросы (Day 22)</h2>
+      <div class="qlist" id="qlist"></div>
+      <div class="actions">
+        <button type="button" id="btn-eval">Прогнать набор</button>
+        <button type="button" class="secondary" id="btn-eval-smoke">Smoke (2 вопроса)</button>
+      </div>
+      <div id="eval-out" style="margin-top:0.6rem"></div>
+    </div>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let busy = false;
+
+    function setBusy(v) {
+      busy = v;
+      document.querySelectorAll("button").forEach((b) => { b.disabled = v; });
+    }
+
+    function esc(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    async function loadStatus() {
+      $("err").textContent = "";
+      const r = await fetch("/api/status");
+      const j = await r.json();
+      if (!j.ok) {
+        $("status").textContent = "ERROR: " + (j.error || "status failed");
+        return;
+      }
+      const active = j.active;
+      const ix = j.indexes?.strategies || {};
+      $("status").textContent =
+        "port " + j.port +
+        " | openai: " + (j.has_openai ? "yes (" + j.model + ")" : "NO") +
+        " | K_PRE=" + j.k_pre + " K_POST=" + j.k_post +
+        " threshold=" + j.sim_threshold +
+        " | strategy=" + j.rag_strategy +
+        "\nactive: " + (active ? active.title : "(none)") +
+        (active ? " [" + active.id + "]" : "") +
+        "\nstructure: " + (ix.structure?.exists ? "yes/" + ix.structure.meta?.chunk_count : "no") +
+        "\nday21: " + j.day21_root;
+    }
+
+    async function loadEvalSet() {
+      const r = await fetch("/api/eval/set");
+      const j = await r.json();
+      let html = "";
+      (j.questions || []).forEach((q) => {
+        html +=
+          "<div class='qitem' data-q='" + esc(q.question) + "'>" +
+          "<strong>" + esc(q.id) + "</strong> — " + esc(q.question) +
+          "<div class='meta'>expect: " + esc(q.expect).slice(0, 140) + "</div></div>";
+      });
+      $("qlist").innerHTML = html;
+      $("qlist").querySelectorAll(".qitem").forEach((el) => {
+        el.addEventListener("click", () => {
+          $("q").value = el.getAttribute("data-q");
+        });
+      });
+    }
+
+    function renderSources(el, sources) {
+      if (sources?.length) {
+        el.style.display = "block";
+        el.textContent = sources.map((s, i) =>
+          "[" + (i + 1) + "] " + (s.section || "?") +
+          " cos=" + Number(s.score).toFixed(3) +
+          (s.rerank_score != null ? " rr=" + Number(s.rerank_score).toFixed(1) : "") +
+          "\n" + (s.text_preview || "")
+        ).join("\n\n");
+      } else {
+        el.style.display = "none";
+      }
+    }
+
+    function renderPipe(enh) {
+      if (!enh) {
+        $("pipe").textContent = "—";
+        $("scores").innerHTML = "";
+        return;
+      }
+      $("pipe").textContent =
+        "rewrite: " + (enh.rewrite || "—") +
+        "\nK_pre=" + (enh.k_pre ?? "?") +
+        " → after filter=" + (enh.post_filter_count ?? "?") +
+        (enh.fallback ? " (fallback top-1)" : "") +
+        " → K_post=" + (enh.k_post ?? "?") +
+        "\nthreshold=" + (enh.threshold ?? "?") +
+        " | dropped=" + ((enh.dropped || []).length);
+
+      const rows = (enh.sources || []).map((s, i) =>
+        "<tr><td>" + (i + 1) + "</td><td>" + esc(s.section) + "</td>" +
+        "<td>" + Number(s.score).toFixed(3) + "</td>" +
+        "<td>" + (s.rerank_score != null ? Number(s.rerank_score).toFixed(1) : "—") + "</td></tr>"
+      ).join("");
+      $("scores").innerHTML =
+        "<table><thead><tr><th>#</th><th>section</th><th>cosine</th><th>rerank</th></tr></thead>" +
+        "<tbody>" + rows + "</tbody></table>";
+    }
+
+    function renderAsk(j) {
+      const base = j.mode === "both" ? j.baseline : j.mode === "baseline" ? j : null;
+      const enh = j.mode === "both" ? j.enhanced : j.mode === "enhanced" ? j : null;
+
+      const baseBody = $("ans-base").querySelector(".body");
+      const enhBody = $("ans-enh").querySelector(".body");
+      if (base) {
+        baseBody.textContent = base.answer || "(empty)";
+        renderSources($("src-base"), base.sources);
+      } else {
+        baseBody.textContent = "—";
+        $("src-base").style.display = "none";
+      }
+      if (enh) {
+        enhBody.textContent = enh.answer || "(empty)";
+        renderSources($("src-enh"), enh.sources);
+        renderPipe(enh);
+      } else {
+        enhBody.textContent = "—";
+        $("src-enh").style.display = "none";
+        if (!base) renderPipe(null);
+      }
+    }
+
+    async function ask(mode) {
+      $("err").textContent = "";
+      const question = $("q").value.trim();
+      if (!question) {
+        $("err").textContent = "Введите вопрос";
+        return;
+      }
+      setBusy(true);
+      try {
+        const r = await fetch("/api/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question, mode }),
+        });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || "ask failed");
+        renderAsk(j);
+      } catch (e) {
+        $("err").textContent = e.message || String(e);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function renderEval(j) {
+      const s = j.summary || {};
+      let html =
+        "<p class='meta'>baseline met: " + s.baseline_met + "/" + s.total +
+        " · enhanced met: " + s.enhanced_met + "/" + s.total +
+        " · avg cos base=" + Number(s.avg_cosine_baseline || 0).toFixed(3) +
+        " enh=" + Number(s.avg_cosine_enhanced || 0).toFixed(3) +
+        " · after filter≈" + Number(s.avg_sources_after_filter || 0).toFixed(1) +
+        "</p><table><thead><tr><th>id</th><th>baseline</th><th>enhanced</th><th>rewrite</th></tr></thead><tbody>";
+      (j.rows || []).forEach((row) => {
+        html +=
+          "<tr><td>" + esc(row.id) + "</td>" +
+          "<td class='" + (row.baseline.expect_met_heuristic ? "ok" : "bad") + "'>" +
+          (row.baseline.expect_met_heuristic ? "met" : "miss") + "</td>" +
+          "<td class='" + (row.enhanced.expect_met_heuristic ? "ok" : "bad") + "'>" +
+          (row.enhanced.expect_met_heuristic ? "met" : "miss") + "</td>" +
+          "<td class='meta'>" + esc((row.enhanced.rewrite || "").slice(0, 80)) + "</td></tr>";
+      });
+      html += "</tbody></table>";
+      $("eval-out").innerHTML = html;
+    }
+
+    async function runEval(limit) {
+      $("err").textContent = "";
+      setBusy(true);
+      try {
+        const r = await fetch("/api/eval/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(limit != null ? { limit } : {}),
+        });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || "eval failed");
+        renderEval(j);
+      } catch (e) {
+        $("err").textContent = e.message || String(e);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    $("btn-both").addEventListener("click", () => ask("both"));
+    $("btn-base").addEventListener("click", () => ask("baseline"));
+    $("btn-enh").addEventListener("click", () => ask("enhanced"));
+    $("btn-eval").addEventListener("click", () => runEval());
+    $("btn-eval-smoke").addEventListener("click", () => runEval(2));
+
+    loadStatus();
+    loadEvalSet();
+  </script>
+</body>
+</html>

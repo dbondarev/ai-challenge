@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 22 — First RAG</title>
+  <style>
+    :root {
+      --ink: #1a1a1a; --muted: #5c5c5c; --line: #d6d2cb; --accent: #1f4d3a;
+      --surface: #fffdf9; --warn: #8b1e1e; --rag: #1f4d6b; --norag: #6b4a1f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(160deg, #f6f4f0, #efeae2);
+    }
+    main { max-width: 1000px; margin: 0 auto; padding: 1.4rem 1.1rem 2.5rem; }
+    h1 { margin: 0 0 0.25rem; font-size: 1.35rem; font-weight: 600; }
+    h2 { margin: 0 0 0.55rem; font-size: 1rem; font-weight: 600; }
+    .sub { margin: 0 0 1rem; color: var(--muted); font-size: 0.88rem; line-height: 1.45; }
+    .panel {
+      border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+      padding: 0.85rem; margin-bottom: 0.85rem;
+    }
+    .meta { font-size: 0.78rem; color: var(--muted); white-space: pre-wrap; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
+    button {
+      appearance: none; border: 0; border-radius: 6px; background: var(--accent);
+      color: #f7f7f5; font: inherit; font-weight: 500; padding: 0.45rem 0.8rem; cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    textarea, input {
+      width: 100%; border: 1px solid var(--line); border-radius: 6px;
+      font: inherit; padding: 0.5rem 0.6rem; margin-bottom: 0.4rem;
+    }
+    textarea { min-height: 4rem; resize: vertical; }
+    label { display: block; font-size: 0.74rem; color: var(--muted); margin-bottom: 0.2rem; }
+    .err { color: var(--warn); font-size: 0.86rem; white-space: pre-wrap; margin-top: 0.4rem; }
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+    @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+    .ans {
+      border: 1px solid var(--line); border-radius: 8px; padding: 0.65rem;
+      background: #faf8f4; font-size: 0.88rem; white-space: pre-wrap; line-height: 1.45;
+      min-height: 6rem;
+    }
+    .ans .who { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.35rem; }
+    .ans.rag .who { color: var(--rag); }
+    .ans.norag .who { color: var(--norag); }
+    .src {
+      margin-top: 0.45rem; padding: 0.45rem; border-radius: 6px;
+      background: #1f2421; color: #e8ebe6; font-size: 0.72rem;
+      font-family: ui-monospace, monospace; white-space: pre-wrap; max-height: 10rem; overflow: auto;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    th, td { border-bottom: 1px solid var(--line); padding: 0.4rem 0.3rem; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 0.72rem; }
+    .ok { color: var(--accent); }
+    .bad { color: var(--warn); }
+    .qlist { font-size: 0.84rem; max-height: 14rem; overflow: auto; }
+    .qitem { padding: 0.4rem 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+    .qitem:hover { background: #f3f1ec; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Day 22 — First RAG query</h1>
+    <p class="sub">
+      Индекс Day 21 → поиск → (опционально) контрольный набор → LLM.
+      Сравните ответы <strong>с RAG</strong> и <strong>без RAG</strong>.
+    </p>
+
+    <div class="panel">
+      <div class="meta" id="status">…</div>
+      <div class="err" id="err"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Вопрос</h2>
+      <label for="q">Текст</label>
+      <textarea id="q" placeholder="Какие три компонента продуктивности выделяет автор?"></textarea>
+      <div class="actions">
+        <button type="button" id="btn-both">Оба режима</button>
+        <button type="button" class="secondary" id="btn-rag">Только RAG</button>
+        <button type="button" class="secondary" id="btn-norag">Только без RAG</button>
+      </div>
+      <div class="cols" style="margin-top:0.7rem">
+        <div class="ans rag" id="ans-rag"><div class="who">С RAG</div><div class="body meta">…</div><div class="src" id="src" style="display:none"></div></div>
+        <div class="ans norag" id="ans-norag"><div class="who">Без RAG</div><div class="body meta">…</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Контрольные вопросы (10)</h2>
+      <div class="qlist" id="qlist"></div>
+      <div class="actions">
+        <button type="button" id="btn-eval">Прогнать набор</button>
+        <button type="button" class="secondary" id="btn-eval-smoke">Smoke (2 вопроса)</button>
+      </div>
+      <div id="eval-out" style="margin-top:0.6rem"></div>
+    </div>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let busy = false;
+
+    function setBusy(v) {
+      busy = v;
+      document.querySelectorAll("button").forEach((b) => { b.disabled = v; });
+    }
+
+    function esc(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    async function loadStatus() {
+      $("err").textContent = "";
+      const r = await fetch("/api/status");
+      const j = await r.json();
+      if (!j.ok) {
+        $("status").textContent = "ERROR: " + (j.error || "status failed");
+        return;
+      }
+      const active = j.active;
+      const ix = j.indexes?.strategies || {};
+      $("status").textContent =
+        "port " + j.port +
+        " | openai: " + (j.has_openai ? "yes (" + j.model + ")" : "NO") +
+        " | strategy=" + j.rag_strategy + " topK=" + j.rag_top_k +
+        "\nactive: " + (active ? active.title : "(none)") +
+        (active ? " [" + active.id + "]" : "") +
+        "\nfixed: " + (ix.fixed?.exists ? "yes/" + ix.fixed.meta?.chunk_count : "no") +
+        " · structure: " + (ix.structure?.exists ? "yes/" + ix.structure.meta?.chunk_count : "no") +
+        "\nday21: " + j.day21_root;
+    }
+
+    async function loadEvalSet() {
+      const r = await fetch("/api/eval/set");
+      const j = await r.json();
+      let html = "";
+      (j.questions || []).forEach((q) => {
+        html +=
+          "<div class='qitem' data-q='" + esc(q.question) + "'>" +
+          "<strong>" + esc(q.id) + "</strong> — " + esc(q.question) +
+          "<div class='meta'>expect: " + esc(q.expect).slice(0, 140) +
+          " · sections: " + esc((q.expected_sections || []).join(", ") || "—") +
+          "</div></div>";
+      });
+      $("qlist").innerHTML = html;
+      $("qlist").querySelectorAll(".qitem").forEach((el) => {
+        el.addEventListener("click", () => {
+          $("q").value = el.getAttribute("data-q");
+        });
+      });
+    }
+
+    function renderAsk(j) {
+      const rag = j.mode === "both" ? j.rag : j.mode === "rag" ? j : null;
+      const norag = j.mode === "both" ? j.no_rag : j.mode === "no_rag" ? j : null;
+
+      const ragBody = $("ans-rag").querySelector(".body");
+      const noragBody = $("ans-norag").querySelector(".body");
+      if (rag) {
+        ragBody.textContent = rag.answer || "(empty)";
+        const src = $("src");
+        if (rag.sources?.length) {
+          src.style.display = "block";
+          src.textContent = rag.sources.map((s, i) =>
+            "[" + (i + 1) + "] " + s.section + " score=" + Number(s.score).toFixed(3) +
+            "\n" + (s.text_preview || "")
+          ).join("\n\n");
+        } else {
+          src.style.display = "none";
+        }
+      } else {
+        ragBody.textContent = "—";
+        $("src").style.display = "none";
+      }
+      if (norag) {
+        noragBody.textContent = norag.answer || "(empty)";
+      } else {
+        noragBody.textContent = "—";
+      }
+    }
+
+    async function ask(mode) {
+      $("err").textContent = "";
+      const question = $("q").value.trim();
+      if (!question) {
+        $("err").textContent = "Введите вопрос";
+        return;
+      }
+      setBusy(true);
+      try {
+        const r = await fetch("/api/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question, mode }),
+        });
+        const j = await r.json();
+        if (!r.ok || j.ok === false) throw new Error(j.error || "ask failed");
+        renderAsk(j);
+      } catch (e) {
+        $("err").textContent = e.message || String(e);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function runEval(limit) {
+      $("err").textContent = "";
+      $("eval-out").innerHTML = "<div class='meta'>Running…</div>";
+      setBusy(true);
+      try {
+        const r = await fetch("/api/eval/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ limit }),
+        });
+        const j = await r.json();
+        if (!r.ok || j.ok === false) throw new Error(j.error || "eval failed");
+        const s = j.summary || {};
+        let html =
+          "<div class='meta'>RAG met " + s.rag_met + "/" + s.total +
+          " · no_RAG met " + s.no_rag_met + "/" + s.total + "</div>" +
+          "<table><thead><tr><th>ID</th><th>RAG</th><th>No RAG</th><th>Hit sections</th></tr></thead><tbody>";
+        (j.rows || []).forEach((row) => {
+          html +=
+            "<tr><td>" + esc(row.id) + "</td>" +
+            "<td class='" + (row.rag.expect_met_heuristic ? "ok" : "bad") + "'>" +
+            (row.rag.expect_met_heuristic ? "ok" : "—") + "<div class='meta'>" +
+            esc(row.rag.answer_preview).slice(0, 160) + "</div></td>" +
+            "<td class='" + (row.no_rag.expect_met_heuristic ? "ok" : "bad") + "'>" +
+            (row.no_rag.expect_met_heuristic ? "ok" : "—") + "<div class='meta'>" +
+            esc(row.no_rag.answer_preview).slice(0, 160) + "</div></td>" +
+            "<td class='meta'>" + esc((row.rag.hit_sections || []).join(", ") || "—") + "</td></tr>";
+        });
+        html += "</tbody></table>";
+        $("eval-out").innerHTML = html;
+      } catch (e) {
+        $("err").textContent = e.message || String(e);
+        $("eval-out").innerHTML = "";
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    $("btn-both").onclick = () => ask("both");
+    $("btn-rag").onclick = () => ask("rag");
+    $("btn-norag").onclick = () => ask("no_rag");
+    $("btn-eval").onclick = () => runEval();
+    $("btn-eval-smoke").onclick = () => runEval(2);
+
+    loadStatus();
+    loadEvalSet();
+  </script>
+</body>
+</html>
